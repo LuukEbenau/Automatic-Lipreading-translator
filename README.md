@@ -10,4 +10,4 @@ One way of working which I usually like is having feat/ feature branches for fea
 # Links
 1. Intesting: https://github.com/VIPL-Audio-Visual-Speech-Understanding
 2. research paper: https://ieeexplore.ieee.org/document/9272286
-3. https://openaccess.thecvf.com/content_CVPR_2020/papers/Prajwal_Learning_Individual_Speaking_Styles_for_Accurate_Lip_to_Speech_Synthesis_CVPR_2020_paper.pdf
+3. https://openaccess.thecvf.com/content_CVPR_2020/papers/Prajwal_Learning_Individual_Speaking_Styles_for_Accurate_Lip_to_Speech_Synthesis_CVPR_2020_paper.pdf https://github.com/Rudrabha/Lip2Wav
