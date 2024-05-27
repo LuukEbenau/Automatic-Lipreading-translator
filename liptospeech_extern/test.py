@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
 from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
+from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
 from torch.nn import DataParallel as DP
 import torch.nn.parallel
 import time
@@ -28,7 +29,7 @@ import soundfile as sf
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', default="Data_dir")
-    parser.add_argument('--data_name', default="LRS2", help='LRS2, LRS3')
+    parser.add_argument('--data_name', default="GRID", help='LRS2, LRS3, GRID')
     parser.add_argument("--checkpoint_dir", type=str, default='./data/checkpoints/')
     parser.add_argument("--checkpoint", type=str, default=None)
 
@@ -97,8 +98,17 @@ def test(v_front, mel_layer, sp_layer, fast_validate=False):
         mel_layer.eval()
         sp_layer.eval()
 
-        if args.data_name == 'LRS2':
-            val_data = LRS2_Dataset(
+        if args.data_name == 'GRID':
+            val_data = GRID_Dataset(
+                data=args.data,
+                mode=args.mode,
+                min_window_size=args.min_window_size,
+                max_window_size=args.max_window_size,
+                max_v_timesteps=args.max_timesteps,
+                augmentations=args.augmentations
+            )
+        elif args.data_name == 'LRS2':
+            train_data = LRS2_Dataset(
                 data=args.data,
                 mode=args.mode,
                 min_window_size=args.min_window_size,
@@ -107,7 +117,7 @@ def test(v_front, mel_layer, sp_layer, fast_validate=False):
                 augmentations=args.augmentations,
             )
         elif args.data_name == 'LRS3':
-            val_data = LRS3_Dataset(
+            train_data = LRS3_Dataset(
                 data=args.data,
                 mode=args.mode,
                 min_window_size=args.min_window_size,
@@ -115,6 +125,8 @@ def test(v_front, mel_layer, sp_layer, fast_validate=False):
                 max_v_timesteps=args.max_timesteps,
                 augmentations=args.augmentations,
             )
+        else:
+            print(f"WARNING: Data name {args.data_name} not recognized")
 
         dataloader = DataLoader(
             val_data,

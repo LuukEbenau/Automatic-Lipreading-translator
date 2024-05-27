@@ -24,8 +24,10 @@ import math
 log1e5 = math.log(1e-5)
 
 class MultiDataset(Dataset):
-    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False):
+    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False, align_ext = 'align', video_ext='mpg'):
         assert mode in ['train', 'test', 'val']
+        self.align_ext = align_ext
+        self.video_ext = video_ext
         self.data = data
         self.mode = mode
         self.sample_window = True if (mode == 'train') else False
@@ -144,14 +146,14 @@ class MultiDataset(Dataset):
         start_sec = 0
         stop_sec = None
 
-        content = open(file_path + ".txt", "r").read()
+        content = open(file_path + f".{self.align_ext}", "r").read()
         crops = self.crops[file].split("/")
         if 'pretrain' in file_path:
             content, start_sec, stop_sec = self.get_pretrain_words(content)
         else:
             content = content.splitlines()[0][7:].strip().lower()
 
-        cap = cv2.VideoCapture(file_path + '.mp4')
+        cap = cv2.VideoCapture(file_path + f'.{self.video_ext}')
         frames = []
         while (cap.isOpened()):
             ret, frame = cap.read()

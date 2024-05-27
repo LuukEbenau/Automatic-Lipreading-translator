@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
 from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
+from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
 from torch.nn import DataParallel as DP
 import torch.nn.parallel
 import time
@@ -72,7 +73,16 @@ def train_net(args):
     os.environ['OMP_NUM_THREADS'] = '2'
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-    if args.data_name == 'LRS2':
+    if args.data_name == 'GRID':
+        val_data = GRID_Dataset(
+            data=args.data,
+            mode=args.mode,
+            min_window_size=args.min_window_size,
+            max_window_size=args.max_window_size,
+            max_v_timesteps=args.max_timesteps,
+            augmentations=args.augmentations
+        )
+    elif args.data_name == 'LRS2':
         train_data = LRS2_Dataset(
             data=args.data,
             mode=args.mode,
@@ -90,6 +100,8 @@ def train_net(args):
             max_v_timesteps=args.max_timesteps,
             augmentations=args.augmentations,
         )
+    else:
+        print(f"WARNING: Data name {args.data_name} not recognized")
 
     v_front = Visual_front(in_channels=1, conf_layer=args.conf_layer, num_head=args.num_head)
     mel_layer = Mel_classifier()
@@ -328,18 +340,18 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=False, epoch=0, writer=
         mel_layer.eval()
         sp_layer.eval()
 
-        if args.data_name == 'LRS2':
-            val_data = LRS2_Dataset(
-                data=args.data,
-                mode='val',
-                min_window_size=args.min_window_size,
-                max_window_size=args.max_window_size,
-                max_v_timesteps=args.max_timesteps,
-                augmentations=args.augmentations,
-            )
 
-        elif args.data_name == 'LRS3':
-            val_data = LRS3_Dataset(
+        if args.data_name == 'GRID':
+            val_data = GRID_Dataset(
+                data=args.data,
+                mode='val',
+                min_window_size=args.min_window_size,
+                max_window_size=args.max_window_size,
+                max_v_timesteps=args.max_timesteps,
+                augmentations=args.augmentations
+            )
+        elif args.data_name == 'LRS2':
+            train_data = LRS2_Dataset(
                 data=args.data,
                 mode='val',
                 min_window_size=args.min_window_size,
@@ -347,6 +359,17 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=False, epoch=0, writer=
                 max_v_timesteps=args.max_timesteps,
                 augmentations=args.augmentations,
             )
+        elif args.data_name == 'LRS3':
+            train_data = LRS3_Dataset(
+                data=args.data,
+                mode='val',
+                min_window_size=args.min_window_size,
+                max_window_size=args.max_window_size,
+                max_v_timesteps=args.max_timesteps,
+                augmentations=args.augmentations,
+            )
+        else:
+            print(f"WARNING: Data name {args.data_name} not recognized")
 
         dataloader = DataLoader(
             val_data,
