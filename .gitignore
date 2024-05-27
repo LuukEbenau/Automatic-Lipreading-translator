@@ -163,4 +163,6 @@ cython_debug/
 datasets/**/**
 datasets/**
 outputs/**
-liptospeech_extern/data/**
+liptospeech_extern/data/LRS2/**
+liptospeech_extern/data/LRS3/**
+datasets.zip

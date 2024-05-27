@@ -58,7 +58,7 @@ class MultiDataset(Dataset):
         file_list, paths = [], []
         crops = {}
 
-        ## LRS3 crop (lip centered axis) load ##
+        # GRID crop (lip centered axis) load ##
         file = open(f"./data/GRID/GRID_crop/preprocess_pretrain.txt", "r")
         content = file.read()
         file.close()
@@ -78,13 +78,15 @@ class MultiDataset(Dataset):
         file = open(f"./data/GRID/GRID_crop/preprocess_trainval.txt", "r")
         content = file.read()
         file.close()
+
+
         for i, line in enumerate(content.splitlines()):
             split = line.split(".")
             file = split[0]
             crop_str = split[1][4:]
             crops['trainval/' + file] = crop_str
 
-        ## LRS3 file lists##
+        ## GRID file lists##
         file = open(f"./data/GRID/unseen_{mode}.txt", "r")
         content = file.read()
         file.close()
@@ -266,7 +268,8 @@ class MultiDataset(Dataset):
 
     def extract_window(self, vid, mel, spec, aud, info):
         # vid : T,C,H,W
-        vid_2_aud = info['audio_fps'] / info['video_fps'] / 160
+        vid_2_aud = info['audio_fps'] / info[
+            'video_fps'] / 160
 
         window_size = min(random.randint(self.min_window_size, self.max_window_size), vid.size(0))
 

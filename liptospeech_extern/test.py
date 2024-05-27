@@ -6,7 +6,8 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
 from src.models.asr_model import ASR_model
-from ctcdecode import CTCBeamDecoder
+
+from pyctcdecode import build_ctcdecoder
 import editdistance
 import os
 from torch.utils.data import DataLoader

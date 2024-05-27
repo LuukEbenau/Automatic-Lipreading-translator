@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
 from src.models.asr_model import ASR_model
-from ctcdecode import CTCBeamDecoder
+from pyctcdecode import build_ctcdecoder
 import editdistance
 import os
 from torch.utils.data import DataLoader
@@ -29,7 +29,7 @@ import librosa
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', default="Data_dir")
-    parser.add_argument('--data_name', default="LRS2", help='LRS2, LRS3')
+    parser.add_argument('--data_name', default="LRS2", help='LRS2, LRS3, GRID')
     parser.add_argument("--checkpoint_dir", type=str, default='./data/checkpoints/')
     parser.add_argument("--visual_front_checkpoint", type=str, default=None)
     parser.add_argument("--checkpoint", type=str, default=None)
@@ -180,7 +180,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
         collate_fn=lambda x: train_data.collate_fn(x),
     )
 
-    decoder = CTCBeamDecoder(
+
+    decoder = build_ctcdecoder(
         train_data.char_list,
         model_path=None,
         alpha=0,
@@ -192,6 +193,19 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
         blank_id=0,
         log_probs_input=False
     )
+
+    # decoder = CTCBeamDecoder(
+    #     train_data.char_list,
+    #     model_path=None,
+    #     alpha=0,
+    #     beta=0,
+    #     cutoff_top_n=40,
+    #     cutoff_prob=1.0,
+    #     beam_width=30,
+    #     num_processes=4,
+    #     blank_id=0,
+    #     log_probs_input=False
+    # )
 
     stft = copy.deepcopy(train_data.stft).cuda()
 
