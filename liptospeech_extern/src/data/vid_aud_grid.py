@@ -24,8 +24,10 @@ import math
 log1e5 = math.log(1e-5)
 
 class MultiDataset(Dataset):
-    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False):
+    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False, align_ext = 'align', video_ext='mpg'):
         assert mode in ['train', 'test', 'val']
+        self.align_ext = align_ext
+        self.video_ext = video_ext
         self.data = data
         self.mode = mode
         self.sample_window = True if (mode == 'train') else False
@@ -44,7 +46,7 @@ class MultiDataset(Dataset):
         self.info = {}
         self.info['video_fps'] = 25
         self.info['audio_fps'] = 16000
-        self.sp = spm.SentencePieceProcessor(model_file='./data/lrs2lrs3_lower.model')
+        self.sp = spm.SentencePieceProcessor(model_file='./data/lrs2lrs3_lower.model') # NOTE: what is a sentence piece processor?
         self.char_list = []
         with open('./data/lrs2lrs3_lower.vocab', encoding='utf-8') as f:
             lines = f.readlines()
@@ -57,7 +59,7 @@ class MultiDataset(Dataset):
         crops = {}
 
         ## LRS3 crop (lip centered axis) load ##
-        file = open(f"./data/LRS3/LRS3_crop/preprocess_pretrain.txt", "r")
+        file = open(f"./data/GRID/crop/preprocess_pretrain.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -65,7 +67,7 @@ class MultiDataset(Dataset):
             file = split[0]
             crop_str = split[1][4:]
             crops['pretrain/' + file] = crop_str
-        file = open(f"./data/LRS3/LRS3_crop/preprocess_test.txt", "r")
+        file = open(f"./data/GRID/crop/preprocess_test.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -73,7 +75,7 @@ class MultiDataset(Dataset):
             file = split[0]
             crop_str = split[1][4:]
             crops['test/' + file] = crop_str
-        file = open(f"./data/LRS3/LRS3_crop/preprocess_trainval.txt", "r")
+        file = open(f"./data/GRID/crop/preprocess_trainval.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -83,7 +85,7 @@ class MultiDataset(Dataset):
             crops['trainval/' + file] = crop_str
 
         ## LRS3 file lists##
-        file = open(f"./data/LRS3/lrs3_unseen_{mode}.txt", "r")
+        file = open(f"./data/GRID/unseen_{mode}.txt", "r")
         content = file.read()
         file.close()
         for file in content.splitlines():
@@ -144,14 +146,14 @@ class MultiDataset(Dataset):
         start_sec = 0
         stop_sec = None
 
-        content = open(file_path + ".txt", "r").read()
+        content = open(file_path + f".{self.align_ext}", "r").read()
         crops = self.crops[file].split("/")
         if 'pretrain' in file_path:
             content, start_sec, stop_sec = self.get_pretrain_words(content)
         else:
             content = content.splitlines()[0][7:].strip().lower()
 
-        cap = cv2.VideoCapture(file_path + '.mp4')
+        cap = cv2.VideoCapture(file_path + f'.{self.video_ext}')
         frames = []
         while (cap.isOpened()):
             ret, frame = cap.read()
@@ -160,7 +162,7 @@ class MultiDataset(Dataset):
             else:
                 break
         cap.release()
-        audio, _ = librosa.load(file_path.replace('LRS3-TED', 'LRS3-TED_audio') + '.wav', sr=16000)
+        audio, _ = librosa.load(file_path.replace('LRS3-TED', 'LRS3-TED_audio') + '.wav', sr=16000) # NOTE: what does this?
         vid = torch.tensor(np.stack(frames, 0))
         audio = torch.tensor(audio).unsqueeze(0)
 
