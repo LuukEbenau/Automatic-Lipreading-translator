@@ -59,7 +59,7 @@ class MultiDataset(Dataset):
         crops = {}
 
         ## LRS3 crop (lip centered axis) load ##
-        file = open(f"./data/GRID/crop/preprocess_pretrain.txt", "r")
+        file = open(f"./data/GRID/GRID_crop/preprocess_pretrain.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -67,7 +67,7 @@ class MultiDataset(Dataset):
             file = split[0]
             crop_str = split[1][4:]
             crops['pretrain/' + file] = crop_str
-        file = open(f"./data/GRID/crop/preprocess_test.txt", "r")
+        file = open(f"./data/GRID/GRID_crop/preprocess_test.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -75,7 +75,7 @@ class MultiDataset(Dataset):
             file = split[0]
             crop_str = split[1][4:]
             crops['test/' + file] = crop_str
-        file = open(f"./data/GRID/crop/preprocess_trainval.txt", "r")
+        file = open(f"./data/GRID/GRID_crop/preprocess_trainval.txt", "r")
         content = file.read()
         file.close()
         for i, line in enumerate(content.splitlines()):
@@ -162,7 +162,7 @@ class MultiDataset(Dataset):
             else:
                 break
         cap.release()
-        audio, _ = librosa.load(file_path.replace('LRS3-TED', 'LRS3-TED_audio') + '.wav', sr=16000) # NOTE: what does this?
+        audio, _ = librosa.load(file_path.replace('GRID', 'GRID_audio') + '.wav', sr=16000) # NOTE: what does this?
         vid = torch.tensor(np.stack(frames, 0))
         audio = torch.tensor(audio).unsqueeze(0)
 

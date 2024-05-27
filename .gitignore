@@ -163,3 +163,4 @@ cython_debug/
 datasets/**/**
 datasets/**
 outputs/**
+liptospeech_extern/data/**
