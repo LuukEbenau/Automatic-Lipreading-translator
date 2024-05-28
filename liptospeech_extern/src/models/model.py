@@ -95,6 +95,18 @@ class Speaker_embed(nn.Module):
         x = self.linear(x)
         return x    # B, 512
 
+
+def get_shape(tensor):
+    shapes = []
+    sub_tensor = tensor
+    while True:
+        try:
+            shapes.append(str(len(sub_tensor)))
+            sub_tensor = sub_tensor[0]
+        except Exception as ex:
+            break
+    return f"({', '.join(shapes)})"
+
 class Mel_classifier(nn.Module):
     def __init__(self):
         super().__init__()
@@ -111,10 +123,17 @@ class Mel_classifier(nn.Module):
 
     def forward(self, x, sp):
         sp = sp.unsqueeze(1).repeat(1, x.size(1), 1)
+        # print(get_shape(x))
         x = torch.cat([x, sp], 2)
+        # print(get_shape(x))
         x = self.fusion(x)  #B, T, 512
+        # print(get_shape(x))
         x = x.permute(0, 2, 1).contiguous()     #B, 512, T
+        # print(get_shape(x))
         x = self.classifier(x)
+        # print(get_shape(x))
         # B, 320, S
-        return rearrange(x, 'b (d c f) t -> b d c (t f)', d=1, f=4)
+        x = rearrange(x, 'b (d c f) t -> b d c (t f)', d=1, f=4)
+        # print(get_shape(x))
+        return x
 

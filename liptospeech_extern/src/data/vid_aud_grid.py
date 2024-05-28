@@ -24,8 +24,9 @@ import math
 log1e5 = math.log(1e-5)
 
 class MultiDataset(Dataset):
-    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False, align_ext = 'align', video_ext='mpg'):
+    def __init__(self, data, mode, max_v_timesteps=155, min_window_size=30, max_window_size=50, max_text_length=150, augmentations=False, num_mel_bins=80, fast_validate=False, align_ext = 'align', video_ext='mpg', samplerate=16000):
         assert mode in ['train', 'test', 'val']
+        self.samplerate = samplerate
         self.align_ext = align_ext
         self.video_ext = video_ext
         self.data = data
@@ -41,20 +42,24 @@ class MultiDataset(Dataset):
         self.file_paths, self.file_names, self.crops = self.build_file_list(data, mode)
         self.f_min = 55.
         self.f_max = 7500.
-        self.stft = TacotronSTFT(filter_length=1024, hop_length=160, win_length=640, n_mel_channels=num_mel_bins, sampling_rate=16000, mel_fmin=self.f_min, mel_fmax=self.f_max)
+        self.stft = TacotronSTFT(filter_length=1024, hop_length=160, win_length=640, n_mel_channels=num_mel_bins, sampling_rate=samplerate, mel_fmin=self.f_min, mel_fmax=self.f_max)
 
         self.info = {}
         self.info['video_fps'] = 25
-        self.info['audio_fps'] = 16000
+        self.info['audio_fps'] = self.samplerate
         self.sp = spm.SentencePieceProcessor(model_file='./data/lrs2lrs3_lower.model') # NOTE: what is a sentence piece processor?
         self.char_list = []
         with open('./data/lrs2lrs3_lower.vocab', encoding='utf-8') as f:
+            print("Loading vocabalary")
             lines = f.readlines()
             for l in lines:
                 self.char_list.append(l.strip().split("\t")[0])
         self.num_characters = self.sp.get_piece_size()
 
+        print(f"Vocabolary containing {self.num_characters} chars")
+
     def build_file_list(self, lrs3, mode):
+        print("Building file list")
         file_list, paths = [], []
         crops = {}
 
@@ -62,24 +67,28 @@ class MultiDataset(Dataset):
         file = open(f"./data/GRID/GRID_crop/preprocess_pretrain.txt", "r")
         content = file.read()
         file.close()
+        print("loaded pretrain data")
         for i, line in enumerate(content.splitlines()):
             split = line.split(".")
             file = split[0]
             crop_str = split[1][4:]
             crops['pretrain/' + file] = crop_str
+
+        
         file = open(f"./data/GRID/GRID_crop/preprocess_test.txt", "r")
         content = file.read()
         file.close()
+        print("Loading test data")
         for i, line in enumerate(content.splitlines()):
             split = line.split(".")
             file = split[0]
             crop_str = split[1][4:]
             crops['test/' + file] = crop_str
+
         file = open(f"./data/GRID/GRID_crop/preprocess_trainval.txt", "r")
         content = file.read()
         file.close()
-
-
+        print("Loading trainval data")
         for i, line in enumerate(content.splitlines()):
             split = line.split(".")
             file = split[0]
@@ -90,6 +99,8 @@ class MultiDataset(Dataset):
         file = open(f"./data/GRID/unseen_{mode}.txt", "r")
         content = file.read()
         file.close()
+
+        print("Loaded unseen file list")
         for file in content.splitlines():
             if file in crops:
                 file_list.append(file)
@@ -149,6 +160,7 @@ class MultiDataset(Dataset):
         stop_sec = None
 
         content = open(file_path + f".{self.align_ext}", "r").read()
+        # print("align content:",content)
         crops = self.crops[file].split("/")
         if 'pretrain' in file_path:
             content, start_sec, stop_sec = self.get_pretrain_words(content)
@@ -164,34 +176,37 @@ class MultiDataset(Dataset):
             else:
                 break
         cap.release()
-        audio, _ = librosa.load(file_path.replace('GRID', 'GRID_audio') + '.wav', sr=16000) # NOTE: what does this?
+        # print("file path is",file_path)
+        audio, _ = librosa.load(file_path.replace('GRID', 'GRID_audio') + '.wav', sr=self.samplerate)
         vid = torch.tensor(np.stack(frames, 0))
+        # print("audio is", audio)
         audio = torch.tensor(audio).unsqueeze(0)
-
+        # print('audio unsqueezed',audio)
         if not 'video_fps' in self.info:
             self.info['video_fps'] = 25
-            self.info['audio_fps'] = 16000
+            self.info['audio_fps'] = self.samplerate
 
         if vid.size(0) < 5 or audio.size(1) < 5:
             vid = torch.zeros([1, 112, 112, 3])
-            audio = torch.zeros([1, int(3 * 16000 / 25)])
+            audio = torch.zeros([1, int(3 * self.samplerate / 25)])
 
-        if 'pretrain' in file_path:
-            st_v_frame = math.floor(start_sec * self.info['video_fps'])
-            end_v_frame = math.ceil(stop_sec * self.info['video_fps'])
-            st_a_frame = math.floor(start_sec * self.info['audio_fps'])
-            end_a_frame = math.ceil(stop_sec * self.info['audio_fps'])
+        # if 'pretrain' in file_path:
+        #     st_v_frame = math.floor(start_sec * self.info['video_fps'])
+        #     end_v_frame = math.ceil(stop_sec * self.info['video_fps'])
+        #     st_a_frame = math.floor(start_sec * self.info['audio_fps'])
+        #     end_a_frame = math.ceil(stop_sec * self.info['audio_fps'])
 
-            vid = vid[st_v_frame:end_v_frame]
-            audio = audio[:, st_a_frame:end_a_frame]
-        else:
-            st_v_frame = 0
+        #     vid = vid[st_v_frame:end_v_frame]
+        #     audio = audio[:, st_a_frame:end_a_frame]
+        # else:
+        st_v_frame = 0
 
+        # print('audio later', audio)
         ## Video ##
         vid = vid.permute(0, 3, 1, 2)  # T C H W
         num_v_frames = vid.size(0)
         if num_v_frames > self.max_v_timesteps:
-            print(f"Cutting Video frames off. Requires {num_v_frames} frames: {file}. But Max_timestep is {self.max_v_timesteps}")
+            # print(f"Cutting Video frames off. Requires {num_v_frames} frames: {file}. But Max_timestep is {self.max_v_timesteps}")
             vid = vid[:self.max_v_timesteps]
             num_v_frames = vid.size(0)
             num_a_frame = round(num_v_frames / self.info['video_fps'] * self.info['audio_fps'])
@@ -200,9 +215,20 @@ class MultiDataset(Dataset):
         crops = crops[st_v_frame * 2:st_v_frame * 2 + num_v_frames * 2]
 
         ## Audio ##
-        aud = audio / torch.abs(audio).max() * 0.9
+        if audio.numel() == 0:  # Check if the tensor is empty
+            # print(audio)
+            raise ValueError("Loaded audio tensor is empty")
+        # print("audio is nright now:",audio)
+
+        max_vals = torch.abs(audio).max(dim=1, keepdim=True)[0]
+        # print("maxvals",max_vals)
+        aud = audio / max_vals * 0.9
         aud = torch.FloatTensor(self.preemphasize(aud.squeeze(0))).unsqueeze(0)
         aud = torch.clamp(aud, min=-1, max=1)
+
+        # aud = audio / torch.abs(audio).max(dim=0, keepdim=True) * 0.9
+        # aud = torch.FloatTensor(self.preemphasize(aud.squeeze(0))).unsqueeze(0)
+        # aud = torch.clamp(aud, min=-1, max=1)
 
         melspec, spec = self.stft.mel_spectrogram(aud)
 
@@ -237,7 +263,8 @@ class MultiDataset(Dataset):
         lines = content.splitlines()[4:]
         words = []
         for line in lines:
-            word, start, stop, _ = line.split(" ")
+            start, stop, word = line.split(" ")
+            # print(word,start,stop)
             start, stop = float(start), float(stop)
             words.append([word, start, stop])
 
@@ -408,7 +435,7 @@ class MultiDataset(Dataset):
 
     def audio_preprocessing(self, aud):
         fc = self.f_min
-        w = fc / (16000 / 2)
+        w = fc / (self.samplerate / 2)
         b, a = signal.butter(7, w, 'high')
         aud = aud.squeeze(0).numpy()
         aud = signal.filtfilt(b, a, aud)
@@ -436,14 +463,14 @@ class MultiDataset(Dataset):
 
 class TacotronSTFT(torch.nn.Module):
     def __init__(self, filter_length=1024, hop_length=256, win_length=1024,
-                 n_mel_channels=80, sampling_rate=22050, mel_fmin=0.0,
+                 n_mel_channels=80, sampling_rate=16000, mel_fmin=0.0,
                  mel_fmax=8000.0):
         super(TacotronSTFT, self).__init__()
         self.n_mel_channels = n_mel_channels
         self.sampling_rate = sampling_rate
         self.stft_fn = STFT(filter_length, hop_length, win_length)
         mel_basis = librosa_mel_fn(
-            sampling_rate, filter_length, n_mel_channels, mel_fmin, mel_fmax)
+            sr=sampling_rate, n_fft=filter_length, n_mels=n_mel_channels, fmin=mel_fmin, fmax=mel_fmax)
         mel_basis = torch.from_numpy(mel_basis).float()
         self.register_buffer('mel_basis', mel_basis)
 

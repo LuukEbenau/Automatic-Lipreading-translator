@@ -166,3 +166,8 @@ outputs/**
 liptospeech_extern/data/LRS2/**
 liptospeech_extern/data/LRS3/**
 datasets.zip
+liptospeech_extern/data/GRID/pretrain/**
+liptospeech_extern/data/GRID_audio/pretrain/**
+liptospeech_extern/data/GRID_audio/s1/**
+liptospeech_extern/data/GRID_audio/s10/**
+liptospeech_extern/runs/**

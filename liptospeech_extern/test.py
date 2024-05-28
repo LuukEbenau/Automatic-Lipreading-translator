@@ -7,7 +7,6 @@ import numpy as np
 from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
 from src.models.asr_model import ASR_model
 
-from pyctcdecode import build_ctcdecoder
 import editdistance
 import os
 from torch.utils.data import DataLoader
@@ -93,7 +92,7 @@ def train_net(args):
 
     _ = test(v_front, mel_layer, sp_layer, fast_validate=False)
 
-def test(v_front, mel_layer, sp_layer, fast_validate=False):
+def test(v_front, mel_layer, sp_layer, fast_validate=False, samplerate = 25000):
     with torch.no_grad():
         v_front.eval()
         mel_layer.eval()
@@ -172,10 +171,10 @@ def test(v_front, mel_layer, sp_layer, fast_validate=False):
             wav_pred = val_data.inverse_mel(g_mel, mel_len, stft)
             for _ in range(g_mel.size(0)):
                 min_len = min(len(wav_pred[_]), len(wav_tr[_]))
-                stoi_list.append(stoi(wav_tr[_][:min_len], wav_pred[_][:min_len], 16000, extended=False))
-                estoi_list.append(stoi(wav_tr[_][:min_len], wav_pred[_][:min_len], 16000, extended=True))
+                stoi_list.append(stoi(wav_tr[_][:min_len], wav_pred[_][:min_len], samplerate, extended=False))
+                estoi_list.append(stoi(wav_tr[_][:min_len], wav_pred[_][:min_len], samplerate, extended=True))
                 try:
-                    pesq_list.append(pesq(8000, librosa.resample(wav_tr[_][:min_len].numpy(), 16000, 8000), librosa.resample(wav_pred[_][:min_len], 16000, 8000), 'nb'))
+                    pesq_list.append(pesq(samplerate/2, librosa.resample(wav_tr[_][:min_len].numpy(), samplerate, samplerate/2), librosa.resample(wav_pred[_][:min_len], samplerate, samplerate/2), 'nb'))
                 except:
                     continue
 
@@ -187,7 +186,7 @@ def test(v_front, mel_layer, sp_layer, fast_validate=False):
 
                 if not os.path.exists(f'./test_{args.data_name}/wav/{m_name}/{v_name}'):
                     os.makedirs(f'./test_{args.data_name}/wav/{m_name}/{v_name}')
-                sf.write(f'./test_{args.data_name}/wav/{m_name}/{v_name}/{file_name}.wav', wav_pred[_], 16000, subtype='PCM_16')
+                sf.write(f'./test_{args.data_name}/wav/{m_name}/{v_name}/{file_name}.wav', wav_pred[_], samplerate, subtype='PCM_16')
 
             if i >= max_batches:
                 break
