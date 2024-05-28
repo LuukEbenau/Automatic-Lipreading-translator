@@ -206,6 +206,13 @@ def get_decoder_type():
 		print("WARNING: decoder detection failed, defaulting to pyctcdecode")
 		return "pyctcdecode"
 
+def pad_sequences(sequences, maxlen, padding_value):
+	padded_sequences = []
+	for seq in sequences:
+		seq = seq + [padding_value] * (maxlen - len(seq))
+		padded_sequences.append(seq)
+	return padded_sequences
+
 def load_decoder(char_list):
 	decodertype = get_decoder_type()
 	if decodertype == 'torchaudio':
@@ -217,12 +224,13 @@ def load_decoder(char_list):
 			tokens=char_list,
 			lm=None,  # Language model, if any
 			nbest=1,  # Number of best hypotheses to return
-			beam_size=30,  # Beam search size
-			beam_threshold=100,  # Beam threshold
-			log_add=True , # Use log-add operation in beam search
+			beam_size=20,  # Beam search size (Zeyer et al., 2017).
+			beam_threshold=50,  # Beam threshold (Graves et al., 2006).
+			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
 			blank_token = char_list[0],
 			sil_token = char_list[0]
 		)
+		# https://arxiv.org/abs/1412.5567
 	elif decodertype == "pyctcdecode":
 		from pyctcdecode import build_ctcdecoder
 		return build_ctcdecoder(
@@ -251,33 +259,79 @@ def load_decoder(char_list):
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
 
-def decode_with_decoder(decoder, softmax_result):
+# def trim_decoded_sequences(decoded_sequences, blank_id):
+# 	trimmed_sequences = []
+# 	for seq in decoded_sequences:
+# 		trimmed_seq = []
+# 		for token in seq:
+# 			if token == blank_id:
+# 				break
+# 			trimmed_seq.append(token)
+# 		trimmed_sequences.append(trimmed_seq)
+# 	return trimmed_sequences
+
+def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, blank_id):
 	decodertype = get_decoder_type()
 
-	if decodertype == "ctcdecode" or decodertype == "torchaudio":
+	if decodertype == "ctcdecode":
 		beam_results, beam_scores, timesteps, out_lens = decoder.decode(softmax_result)
-	elif decodertype == "pyctcdecode":
-		# Handle batch processing for pyctcdecode
-		batch_size = softmax_result.size(0)
+		beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
+	elif decodertype == "torchaudio":
+		decoded_output = decoder(softmax_result)
 		beam_results = []
-		beam_scores = []
-		timesteps = []
 		out_lens = []
-		softmax_result = softmax_result.cpu().detach()
-		for i in range(batch_size):
-			result, score, timestep, out_len = decoder.decode(softmax_result[i])
-			beam_results.append(result)
-			beam_scores.append(score)
-			timesteps.append(timestep)
-			out_lens.append(out_len)
-		beam_results = torch.stack(beam_results)
-		beam_scores = torch.stack(beam_scores)
-		timesteps = torch.stack(timesteps)
-		out_lens = torch.stack(out_lens)
+
+		# Process the decoded_output to extract tokens and lengths
+		for hypotheses in decoded_output:
+			batch_beam_results = []
+			batch_out_lens = []
+			for hypothesis in hypotheses:
+				tokens = hypothesis.tokens.tolist()
+				batch_beam_results.append(tokens)
+				batch_out_lens.append(len(tokens))
+			beam_results.append(batch_beam_results)
+			out_lens.append(batch_out_lens)
+
+		# Find the maximum length for padding
+		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
+
+		# Pad sequences to the maximum length
+		beam_results_padded = [pad_sequences(batch, max_len, blank_id) for batch in beam_results]
+
+		# Convert to tensors
+		beam_results = torch.tensor(beam_results_padded)
+		out_lens = torch.tensor(out_lens)
+
+		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
+
+		# Convert to tensors if needed
+		# beam_results = torch.tensor(beam_results)
+		# out_lens = torch.tensor(out_lens)
+		# beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
+	# elif decodertype == "pyctcdecode":
+	# 	# Handle batch processing for pyctcdecode
+	# 	batch_size = softmax_result.size(0)
+	# 	beam_results = []
+	# 	beam_scores = []
+	# 	timesteps = []
+	# 	out_lens = []
+	# 	softmax_result = softmax_result.cpu().detach()
+	# 	for i in range(batch_size):
+	# 		result, score, timestep, out_len = decoder.decode(softmax_result[i])
+	# 		beam_results.append(result)
+	# 		beam_scores.append(score)
+	# 		timesteps.append(timestep)
+	# 		out_lens.append(out_len)
+	# 	beam_results = torch.stack(beam_results)
+	# 	beam_scores = torch.stack(beam_scores)
+	# 	timesteps = torch.stack(timesteps)
+	# 	out_lens = torch.stack(out_lens)
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
-
-	return beam_results, beam_scores, timesteps, out_lens
+	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
+	beam_wer.extend(wer(beam_text, truth_txt))
+	return beam_text, truth_txt, beam_wer
+	# return beam_results, out_lens
 
 from functools import partial
 def collate_data(train_data, batch):
@@ -356,7 +410,6 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 				gen_v_len.append(temp_v_feat.size(0))
 			gen_v_len = torch.tensor(gen_v_len).unsqueeze(1)
 
-			# BUG: actual input dimension 50, expected input dim is 78
 			gen_mel = mel_layer(gen_v_feat, sp_feat)  # B,1,80,4S
 			# print(f"video shape: {get_shape(vid_len)}")
 			# print(f"max window size: {max_window_size}")
@@ -390,14 +443,13 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			gen_loss.backward()
 			optimizer.step()
 
-			softmax_result = F.softmax(ctc_pred, 2)
-			# print("ctc pred:", get_shape(ctc_pred))
-			# print('softmaxres:',get_shape(softmax_result))
-			beam_results, beam_scores, timesteps, out_lens = decode_with_decoder(decoder, softmax_result)
-
-			beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
-			truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
-			beam_wer.extend(wer(beam_text, truth_txt))
+			softmax_result = F.softmax(ctc_pred, 2).cpu() # .detach()
+			print("Start beam decoding...")
+			beam_text, truth_txt, beam_wer = decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, train_data.char_list[0])
+			print("Finished beam decoding")
+			# beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
+			# truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
+			# beam_wer.extend(wer(beam_text, truth_txt))
 
 			if i % 100 == 0:
 				wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
@@ -462,12 +514,11 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	print('Finishing training')
 
 
-def validate(v_front, mel_layer, sp_layer, fast_validate=False, epoch=0, writer=None):
+def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()
 		sp_layer.eval()
-
 
 		if args.data_name == 'GRID':
 			val_data = GRID_Dataset(
@@ -498,7 +549,7 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=False, epoch=0, writer=
 			)
 		else:
 			print(f"WARNING: Data name {args.data_name} not recognized")
-
+		
 		dataloader = DataLoader(
 			val_data,
 			shuffle=True if fast_validate else False,
@@ -511,6 +562,7 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=False, epoch=0, writer=
 		stft = copy.deepcopy(val_data.stft).cuda()
 		criterion = nn.L1Loss().cuda()
 		batch_size = dataloader.batch_size
+		
 		if fast_validate:
 			samples = min(10 * batch_size, int(len(dataloader.dataset)))
 			max_batches = 10
