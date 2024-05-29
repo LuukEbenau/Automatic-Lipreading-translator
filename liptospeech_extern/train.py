@@ -23,7 +23,8 @@ from pystoi import stoi
 from matplotlib import pyplot as plt
 import copy
 import librosa
-
+from functools import partial
+import tqdm
 
 def parse_args():
 	parser = argparse.ArgumentParser()
@@ -59,6 +60,8 @@ def parse_args():
 	parser.add_argument("--output_content_loss", default=False, action='store_true')
 	parser.add_argument("--output_content_on", type=float, default=0.7)
 	parser.add_argument("--gpu", type=str, default='0')
+
+	parser.add_argument("--samplerate", type=int, default=16000)
 	args = parser.parse_args()
 	return args
 
@@ -281,7 +284,6 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 		beam_results = []
 		out_lens = []
 
-		# Process the decoded_output to extract tokens and lengths
 		for hypotheses in decoded_output:
 			batch_beam_results = []
 			batch_out_lens = []
@@ -292,53 +294,24 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 			beam_results.append(batch_beam_results)
 			out_lens.append(batch_out_lens)
 
-		# Find the maximum length for padding
 		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
-
-		# Pad sequences to the maximum length
 		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
 
-		# Convert to tensors
 		beam_results = torch.tensor(beam_results_padded)
 		out_lens = torch.tensor(out_lens)
 
 		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
-
-		# Convert to tensors if needed
-		# beam_results = torch.tensor(beam_results)
-		# out_lens = torch.tensor(out_lens)
-		# beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
-	# elif decodertype == "pyctcdecode":
-	# 	# Handle batch processing for pyctcdecode
-	# 	batch_size = softmax_result.size(0)
-	# 	beam_results = []
-	# 	beam_scores = []
-	# 	timesteps = []
-	# 	out_lens = []
-	# 	softmax_result = softmax_result.cpu().detach()
-	# 	for i in range(batch_size):
-	# 		result, score, timestep, out_len = decoder.decode(softmax_result[i])
-	# 		beam_results.append(result)
-	# 		beam_scores.append(score)
-	# 		timesteps.append(timestep)
-	# 		out_lens.append(out_len)
-	# 	beam_results = torch.stack(beam_results)
-	# 	beam_scores = torch.stack(beam_scores)
-	# 	timesteps = torch.stack(timesteps)
-	# 	out_lens = torch.stack(out_lens)
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
 	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
 	beam_wer.extend(wer(beam_text, truth_txt))
 	return beam_text, truth_txt, beam_wer
-	# return beam_results, out_lens
 
-from functools import partial
+
 def collate_data(data, batch):
     return data.collate_fn(batch)
 
-def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = 25000):
-	# NOTE: i replaced all 8000 values with samplingrate/2, but not sure if this correct. otherwise, reverse it
+def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args):
 	best_val_stoi = 0
 	writer = SummaryWriter(comment=os.path.split(args.checkpoint_dir)[-1])
 
@@ -369,7 +342,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	samples = len(dataloader.dataset)
 	batch_size = dataloader.batch_size
 	step = 0
-	for epoch in range(args.start_epoch, epochs):
+
+	for epoch in tqdm(range(args.start_epoch, epochs)):
 		recon_loss_list = []
 		loss_list = []
 		beam_wer = []
@@ -443,12 +417,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			gen_loss.backward()
 			optimizer.step()
 
-			softmax_result = F.softmax(ctc_pred, 2).cpu() # .detach()
+			softmax_result = F.softmax(ctc_pred, 2).cpu()
 			beam_text, truth_txt, beam_wer = decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, train_data.char_list[0])
-
-			# beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
-			# truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
-			# beam_wer.extend(wer(beam_text, truth_txt))
 
 			if i % 100 == 0:
 				wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
@@ -470,12 +440,12 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					writer.add_scalar('train/wer', np.array(beam_wer).mean(), step)
 					writer.add_image('train_mel/gen', train_data.plot_spectrogram_to_numpy(gen_mel.cpu().detach().numpy()[0]), step)
 					writer.add_image('train_mel/gt', train_data.plot_spectrogram_to_numpy(mel.detach().numpy()[0]), step)
-					writer.add_audio('train_aud/pred_mel', wav_pred[0], global_step=step, sample_rate=samplerate)
-					writer.add_audio('train_aud/gt_mel', wav_gt[0], global_step=step, sample_rate=samplerate)
-					writer.add_audio('train_aud/gt_wav', wav_tr[0].numpy(), global_step=step, sample_rate=samplerate)
+					writer.add_audio('train_aud/pred_mel', wav_pred[0], global_step=step, sample_rate=args.samplerate)
+					writer.add_audio('train_aud/gt_mel', wav_gt[0], global_step=step, sample_rate=args.samplerate)
+					writer.add_audio('train_aud/gt_wav', wav_tr[0].numpy(), global_step=step, sample_rate=args.samplerate)
 
 			if step % args.eval_step == 0:
-				logs = validate(v_front, mel_layer, sp_layer, epoch=epoch, writer=writer, fast_validate=True)
+				logs = validate(v_front, mel_layer, sp_layer, epoch=epoch, writer=writer, fast_validate=True, args=args)
 
 				print('VAL_stoi: ', logs[1])
 				print('Saving checkpoint: %d' % epoch)
@@ -513,7 +483,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	print('Finishing training')
 
 
-def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None, samplerate=16000):
+def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None, args):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()
@@ -597,10 +567,10 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=N
 			wav_gt = val_data.inverse_mel(mel.cuda(), mel_len, stft)
 			for _ in range(g_mel.size(0)):
 				min_len = min(len(wav_pred[_]), len(wav_tr[_]))
-				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], samplerate, extended=False))
-				estoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], samplerate, extended=True))
+				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=False))
+				estoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=True))
 				try:
-					pesq_list.append(pesq(8000, librosa.resample(wav_tr[_][:min_len].numpy(), samplerate, samplerate/2), librosa.resample(wav_pred[_][:min_len], samplerate, 8000), 'nb'))
+					pesq_list.append(pesq(args.samplerate/2, librosa.resample(wav_tr[_][:min_len].numpy(), args.samplerate, args.samplerate/2), librosa.resample(wav_pred[_][:min_len], args.samplerate, args.samplerate/2), 'nb'))
 				except:
 					pass
 
@@ -612,11 +582,11 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=N
 									 val_data.plot_spectrogram_to_numpy(mel.detach().numpy()[0][:, :, :mel_len[0]]),
 									 epoch)
 
-					writer.add_audio('val_aud_%d/pred' % i, wav_pred[0], global_step=epoch, sample_rate=samplerate)
+					writer.add_audio('val_aud_%d/pred' % i, wav_pred[0], global_step=epoch, sample_rate=args.samplerate)
 					writer.add_audio('val_aud_%d/mel' % i, wav_gt[0][:len(wav_pred[0])], global_step=epoch,
-									 sample_rate=samplerate)
+									 sample_rate=args.samplerate)
 					writer.add_audio('val_aud_%d/gt' % i, wav_tr[0][:len(wav_pred[0])], global_step=epoch,
-									 sample_rate=samplerate)
+									 sample_rate=args.samplerate)
 					fig = plt.figure()
 					ax = fig.add_subplot(1, 1, 1)
 					ax.set(xlim=[0, len(wav_pred[0])], ylim=[-1, 1])
