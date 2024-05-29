@@ -28,6 +28,14 @@ import tqdm
 import pkg_resources
 import importlib
 
+# TODO LIST:
+# 1. Create vocabolary from dataset
+# 2. fix CTCdecoder blank token
+
+# 3. replace mel_layer with flow matching 
+# calculate diffusion loss
+
+
 def parse_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--data', default="Data_dir")
@@ -79,6 +87,8 @@ def train_net(args):
 	train_data = get_dataset(args.data_name)
 
 	v_front = Visual_front(in_channels=1, conf_layer=args.conf_layer, num_head=args.num_head)
+
+	# So modify mel classifier with the encoder from matchaTTS
 	mel_layer = Mel_classifier()
 	sp_layer = Speaker_embed()
 	ctc_layer = CTC_classifier(train_data.num_characters)
@@ -92,7 +102,7 @@ def train_net(args):
 		checkpoint = torch.load(args.visual_front_checkpoint, map_location=lambda storage, loc: storage.cuda())
 		v_front.load_state_dict(checkpoint, strict=False)
 		del checkpoint
-		
+
 	if args.checkpoint is not None:
 		print(f"Loading checkpoint: {args.checkpoint}")
 		checkpoint = torch.load(args.checkpoint, map_location=lambda storage, loc: storage.cuda())
@@ -215,6 +225,9 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			# print(f"shape mel_masks: {get_shape(mel_masks)}")
 			# print(vid_len[0])
 
+			#TODO: # Compute loss of the decoder
+			# diff_loss, _ = self.decoder.compute_loss(x1=y, mask=y_mask, mu=mu_y, spks=spks, cond=cond)
+
 			gen_mel = gen_mel * mel_masks
 
 			if args.asr_checkpoint is not None and args.output_content_loss:
@@ -260,7 +273,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					print(f'######## Step(Epoch): {step}({epoch}), Recon Loss: {recon_loss.cpu().item()} #########')
 					for (predict, truth) in list(zip(beam_text, truth_txt))[:3]:
 						print(f'VP: {predict.upper()}')
-						print(f'GT: {truth.upper()}\n')
+						print(f'GT: {truth.upper()}\n') # Ground truth
 					writer.add_scalar('train/wer', np.array(beam_wer).mean(), step)
 					writer.add_image('train_mel/gen', train_data.plot_spectrogram_to_numpy(gen_mel.cpu().detach().numpy()[0]), step)
 					writer.add_image('train_mel/gt', train_data.plot_spectrogram_to_numpy(mel.detach().numpy()[0]), step)
@@ -468,6 +481,7 @@ def load_decoder(char_list):
 	if decodertype == 'torchaudio':
 		from torchaudio.models.decoder import ctc_decoder
 		# https://pytorch.org/audio/2.3.0/generated/torchaudio.models.decoder.ctc_decoder.html#torchaudio.models.decoder.ctc_decoder
+		print(f"Blank token is {char_list[3]}")
 		return ctc_decoder(
 			lexicon=None,  # or specify a lexicon if needed
 			tokens=char_list,
@@ -476,7 +490,7 @@ def load_decoder(char_list):
 			beam_size=30,  # Beam search size (Zeyer et al., 2017).
 			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
 			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
-			blank_token = char_list[0],
+			blank_token = char_list[3], # should be sil character
 			sil_token = char_list[0]
 		)
 		# https://arxiv.org/abs/1412.5567

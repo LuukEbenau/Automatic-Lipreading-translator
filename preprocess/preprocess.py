@@ -1,11 +1,12 @@
 
 import glob
-import face_recognition
+
 import cv2
 import os
 from tqdm import tqdm
 
 def extract_lip_embeddings(data_dir, input_file):
+	import face_recognition
 	video_path = data_dir + '/' + input_file
 	identifier = video_path.split('/')[-1].split('.')[0]  # This will be the video identifier without file extension
 	video_capture = cv2.VideoCapture(video_path)

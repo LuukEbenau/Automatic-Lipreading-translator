@@ -47,9 +47,9 @@ class MultiDataset(Dataset):
         self.info = {}
         self.info['video_fps'] = 25
         self.info['audio_fps'] = self.samplerate
-        self.sp = spm.SentencePieceProcessor(model_file='./data/lrs2lrs3_lower.model') # NOTE: what is a sentence piece processor?
+        self.sp = spm.SentencePieceProcessor(model_file='./data/grid_lower.model') # NOTE: what is a sentence piece processor?
         self.char_list = []
-        with open('./data/lrs2lrs3_lower.vocab', encoding='utf-8') as f:
+        with open('./data/grid_lower.vocab', encoding='utf-8') as f:
             print("Loading vocabalary")
             lines = f.readlines()
             for l in lines:
