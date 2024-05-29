@@ -34,14 +34,14 @@ def parse_args():
 	parser.add_argument("--checkpoint", type=str, default=None)
 	parser.add_argument("--asr_checkpoint", type=str, default=None)
 
-	parser.add_argument("--batch_size", type=int, default=16)
+	parser.add_argument("--batch_size", type=int, default=4)
 	parser.add_argument("--epochs", type=int, default=150)
 	parser.add_argument("--lr", type=float, default=0.0001)
 	parser.add_argument("--weight_decay", type=float, default=0.00001)
 	parser.add_argument("--workers", type=int, default=5)
 	parser.add_argument("--seed", type=int, default=1)
 
-	parser.add_argument("--eval_step", type=int, default=3000)
+	parser.add_argument("--eval_step", type=int, default=1000)
 
 	parser.add_argument("--start_epoch", type=int, default=0)
 	parser.add_argument("--augmentations", default=True)
@@ -224,8 +224,8 @@ def load_decoder(char_list):
 			tokens=char_list,
 			lm=None,  # Language model, if any
 			nbest=1,  # Number of best hypotheses to return
-			beam_size=20,  # Beam search size (Zeyer et al., 2017).
-			beam_threshold=50,  # Beam threshold (Graves et al., 2006).
+			beam_size=30,  # Beam search size (Zeyer et al., 2017).
+			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
 			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
 			blank_token = char_list[0],
 			sil_token = char_list[0]
@@ -296,7 +296,7 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
 
 		# Pad sequences to the maximum length
-		beam_results_padded = [pad_sequences(batch, max_len, blank_id) for batch in beam_results]
+		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
 
 		# Convert to tensors
 		beam_results = torch.tensor(beam_results_padded)
@@ -334,8 +334,8 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 	# return beam_results, out_lens
 
 from functools import partial
-def collate_data(train_data, batch):
-    return train_data.collate_fn(batch)
+def collate_data(data, batch):
+    return data.collate_fn(batch)
 
 def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = 25000):
 	# NOTE: i replaced all 8000 values with samplingrate/2, but not sure if this correct. otherwise, reverse it
@@ -444,9 +444,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			optimizer.step()
 
 			softmax_result = F.softmax(ctc_pred, 2).cpu() # .detach()
-			print("Start beam decoding...")
 			beam_text, truth_txt, beam_wer = decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, train_data.char_list[0])
-			print("Finished beam decoding")
+
 			# beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
 			# truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
 			# beam_wer.extend(wer(beam_text, truth_txt))
@@ -514,7 +513,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	print('Finishing training')
 
 
-def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None):
+def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None, samplerate=16000):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()
@@ -550,13 +549,14 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=N
 		else:
 			print(f"WARNING: Data name {args.data_name} not recognized")
 		
+		collate_fn_partial = partial(collate_data, val_data)
 		dataloader = DataLoader(
 			val_data,
 			shuffle=True if fast_validate else False,
 			batch_size=args.batch_size,
 			num_workers=args.workers,
 			drop_last=False,
-			collate_fn=lambda x: val_data.collate_fn(x),
+			collate_fn=collate_fn_partial,
 		)
 
 		stft = copy.deepcopy(val_data.stft).cuda()
@@ -600,7 +600,7 @@ def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=N
 				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], samplerate, extended=False))
 				estoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], samplerate, extended=True))
 				try:
-					pesq_list.append(pesq(samplerate/2, librosa.resample(wav_tr[_][:min_len].numpy(), samplerate, samplerate/2), librosa.resample(wav_pred[_][:min_len], samplerate, samplerate/2), 'nb'))
+					pesq_list.append(pesq(8000, librosa.resample(wav_tr[_][:min_len].numpy(), samplerate, samplerate/2), librosa.resample(wav_pred[_][:min_len], samplerate, 8000), 'nb'))
 				except:
 					pass
 

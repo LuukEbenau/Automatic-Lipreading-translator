@@ -175,3 +175,5 @@ liptospeech_extern/data/GRID_audio/s10/**
 liptospeech_extern/runs/**
 liptospeech_extern/data/GRID/main/**
 liptospeech_extern/data/GRID/trainval/**
+liptospeech_extern/checkpoints/**
+liptospeech_extern/pretrained/**

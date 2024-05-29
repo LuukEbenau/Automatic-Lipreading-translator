@@ -8,7 +8,7 @@ This repository contains the PyTorch implementation of the following paper:
 <div align="center"><img width="30%" src="img/Img.PNG?raw=true" /></div>
 
 # running
-python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000015 --epochs 2
+python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000015 --epochs 100 --batch_size 3 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ --output_content_on --asr_checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_ASR.ckpt
 
 ## Requirements
 - python 3.7
