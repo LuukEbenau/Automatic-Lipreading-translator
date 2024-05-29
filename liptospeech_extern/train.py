@@ -120,7 +120,6 @@ def train_net(args):
 		checkpoint = torch.load(args.visual_front_checkpoint, map_location=lambda storage, loc: storage.cuda())
 		v_front.load_state_dict(checkpoint, strict=False)
 		del checkpoint
-		
 	if args.checkpoint is not None:
 		print(f"Loading checkpoint: {args.checkpoint}")
 		checkpoint = torch.load(args.checkpoint, map_location=lambda storage, loc: storage.cuda())
@@ -343,7 +342,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	batch_size = dataloader.batch_size
 	step = 0
 
-	for epoch in tqdm(range(args.start_epoch, epochs)):
+	for epoch in tqdm.tqdm(range(args.start_epoch, epochs)):
 		recon_loss_list = []
 		loss_list = []
 		beam_wer = []
@@ -417,9 +416,11 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			gen_loss.backward()
 			optimizer.step()
 
+			################################### DECODE ########################################
 			softmax_result = F.softmax(ctc_pred, 2).cpu()
 			beam_text, truth_txt, beam_wer = decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, train_data.char_list[0])
 
+			################################### VISUALIZE & VALIDATE ########################################
 			if i % 100 == 0:
 				wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
 				wav_gt = train_data.inverse_mel(mel.cuda().detach()[0], mel_len[0:1], stft)
@@ -445,7 +446,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					writer.add_audio('train_aud/gt_wav', wav_tr[0].numpy(), global_step=step, sample_rate=args.samplerate)
 
 			if step % args.eval_step == 0:
-				logs = validate(v_front, mel_layer, sp_layer, epoch=epoch, writer=writer, fast_validate=True, args=args)
+				logs = validate(v_front, mel_layer, sp_layer, args, epoch=epoch, writer=writer, fast_validate=True)
 
 				print('VAL_stoi: ', logs[1])
 				print('Saving checkpoint: %d' % epoch)
@@ -483,7 +484,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	print('Finishing training')
 
 
-def validate(v_front, mel_layer, sp_layer, fast_validate=True, epoch=0, writer=None, args):
+def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, writer=None):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()

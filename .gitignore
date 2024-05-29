@@ -177,3 +177,4 @@ liptospeech_extern/data/GRID/main/**
 liptospeech_extern/data/GRID/trainval/**
 liptospeech_extern/checkpoints/**
 liptospeech_extern/pretrained/**
+liptospeech_extern/old_runs/**
