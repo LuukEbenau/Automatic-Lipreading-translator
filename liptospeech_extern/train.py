@@ -25,6 +25,8 @@ import copy
 import librosa
 from functools import partial
 import tqdm
+import pkg_resources
+import importlib
 
 def parse_args():
 	parser = argparse.ArgumentParser()
@@ -65,46 +67,16 @@ def parse_args():
 	args = parser.parse_args()
 	return args
 
-
 def train_net(args):
 	torch.backends.cudnn.deterministic = False
 	torch.backends.cudnn.benchmark = True
 	torch.manual_seed(args.seed)
 	torch.cuda.manual_seed_all(args.seed)
 	random.seed(args.seed)
-	os.environ['OMP_NUM_THREADS'] = '2'
+	os.environ['OMP_NUM_THREADS'] = '6' #it was 2, can i make it bigger? 2
 	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-	if args.data_name == 'GRID':
-		print("Selected GRID Dataset")
-		train_data = GRID_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations
-		)
-	elif args.data_name == 'LRS2':
-		train_data = LRS2_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations,
-		)
-	elif args.data_name == 'LRS3':
-		train_data = LRS3_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations,
-		)
-	else:
-		print(f"WARNING: Data name {args.data_name} not recognized")
+	train_data = get_dataset(args.data_name)
 
 	v_front = Visual_front(in_channels=1, conf_layer=args.conf_layer, num_head=args.num_head)
 	mel_layer = Mel_classifier()
@@ -120,6 +92,7 @@ def train_net(args):
 		checkpoint = torch.load(args.visual_front_checkpoint, map_location=lambda storage, loc: storage.cuda())
 		v_front.load_state_dict(checkpoint, strict=False)
 		del checkpoint
+		
 	if args.checkpoint is not None:
 		print(f"Loading checkpoint: {args.checkpoint}")
 		checkpoint = torch.load(args.checkpoint, map_location=lambda storage, loc: storage.cuda())
@@ -159,156 +132,6 @@ def train_net(args):
 
 	# _ = validate(v_front, mel_layer, post, sp_layer, fast_validate=True)
 	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args)
-
-
-def get_shape(tensor):
-	shapes = []
-	sub_tensor = tensor
-	while True:
-		try:
-			shapes.append(str(len(sub_tensor)))
-			sub_tensor = sub_tensor[0]
-		except Exception as ex:
-			break
-	return f"({', '.join(shapes)})"
-			
-
-import pkg_resources
-import importlib
-
-def check_package_installed(package_name):
-	# Check using pkg_resources
-	is_installed = False
-	try:
-		pkg_resources.get_distribution(package_name)
-		# print(f"{package_name} is installed (pkg_resources).")
-		is_installed = True
-	except pkg_resources.DistributionNotFound:
-		pass
-		# print(f"{package_name} is not installed (pkg_resources).")
-
-	# Check using importlib
-	try:
-		importlib.import_module(package_name)
-		# print(f"{package_name} is installed (importlib).")
-		is_installed = True
-	except ImportError:
-		pass
-		# print(f"{package_name} is not installed (importlib).")
-	return is_installed
-
-def get_decoder_type():
-	if check_package_installed("torchaudio"):
-		return "torchaudio"
-	if check_package_installed("ctcdecode"):
-		return "ctcdecode"
-	elif check_package_installed("pyctcdecode"):
-		return "pyctcdecode"
-	else:
-		print("WARNING: decoder detection failed, defaulting to pyctcdecode")
-		return "pyctcdecode"
-
-def pad_sequences(sequences, maxlen, padding_value):
-	padded_sequences = []
-	for seq in sequences:
-		seq = seq + [padding_value] * (maxlen - len(seq))
-		padded_sequences.append(seq)
-	return padded_sequences
-
-def load_decoder(char_list):
-	decodertype = get_decoder_type()
-	if decodertype == 'torchaudio':
-		from torchaudio.models.decoder import ctc_decoder
-		# https://pytorch.org/audio/2.3.0/generated/torchaudio.models.decoder.ctc_decoder.html#torchaudio.models.decoder.ctc_decoder
-		# print(char_list)
-		return ctc_decoder(
-			lexicon=None,  # or specify a lexicon if needed
-			tokens=char_list,
-			lm=None,  # Language model, if any
-			nbest=1,  # Number of best hypotheses to return
-			beam_size=30,  # Beam search size (Zeyer et al., 2017).
-			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
-			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
-			blank_token = char_list[0],
-			sil_token = char_list[0]
-		)
-		# https://arxiv.org/abs/1412.5567
-	elif decodertype == "pyctcdecode":
-		from pyctcdecode import build_ctcdecoder
-		return build_ctcdecoder(
-			labels=char_list,
-			kenlm_model_path=None,
-			alpha=0,
-			beta=0,
-			
-			# beam_width=30,
-			# num_cpus=4,
-		)
-	elif decodertype == "ctcdecode":
-		from ctcdecode import CTCBeamDecoder
-		return CTCBeamDecoder(
-			char_list,
-			model_path=None,
-			alpha=0,
-			beta=0,
-			cutoff_top_n=40,
-			cutoff_prob=1.0,
-			beam_width=30,
-			num_processes=4,
-			blank_id=0,
-			log_probs_input=False,
-		)
-	else:
-		raise Exception(f"Decoder {decodertype} does not exist")
-
-# def trim_decoded_sequences(decoded_sequences, blank_id):
-# 	trimmed_sequences = []
-# 	for seq in decoded_sequences:
-# 		trimmed_seq = []
-# 		for token in seq:
-# 			if token == blank_id:
-# 				break
-# 			trimmed_seq.append(token)
-# 		trimmed_sequences.append(trimmed_seq)
-# 	return trimmed_sequences
-
-def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, blank_id):
-	decodertype = get_decoder_type()
-
-	if decodertype == "ctcdecode":
-		beam_results, beam_scores, timesteps, out_lens = decoder.decode(softmax_result)
-		beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
-	elif decodertype == "torchaudio":
-		decoded_output = decoder(softmax_result)
-		beam_results = []
-		out_lens = []
-
-		for hypotheses in decoded_output:
-			batch_beam_results = []
-			batch_out_lens = []
-			for hypothesis in hypotheses:
-				tokens = hypothesis.tokens.tolist()
-				batch_beam_results.append(tokens)
-				batch_out_lens.append(len(tokens))
-			beam_results.append(batch_beam_results)
-			out_lens.append(batch_out_lens)
-
-		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
-		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
-
-		beam_results = torch.tensor(beam_results_padded)
-		out_lens = torch.tensor(out_lens)
-
-		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
-	else:
-		raise Exception(f"Decoder {decodertype} does not exist")
-	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
-	beam_wer.extend(wer(beam_text, truth_txt))
-	return beam_text, truth_txt, beam_wer
-
-
-def collate_data(data, batch):
-    return data.collate_fn(batch)
 
 def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args):
 	best_val_stoi = 0
@@ -571,7 +394,8 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=False))
 				estoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=True))
 				try:
-					pesq_list.append(pesq(args.samplerate/2, librosa.resample(wav_tr[_][:min_len].numpy(), args.samplerate, args.samplerate/2), librosa.resample(wav_pred[_][:min_len], args.samplerate, args.samplerate/2), 'nb'))
+
+					pesq_list.append(pesq(8000, librosa.resample(wav_tr[_][:min_len].numpy(), args.samplerate, 8000), librosa.resample(wav_pred[_][:min_len], args.samplerate, 8000), 'nb'))
 				except:
 					pass
 
@@ -628,8 +452,185 @@ def wer(predict, truth):
 	wer = [1.0 * editdistance.eval(p[0], p[1]) / len(p[1]) for p in word_pairs]
 	return wer
 
+def load_decoder(char_list):
+	"""Load decoder based on installed software
+
+	Args:
+			char_list (string[]): tokens for the decoder, its a array of ngrams
+
+	Raises:
+			Exception: _description_
+
+	Returns:
+			decoder: decoder instance
+	"""
+	decodertype = get_decoder_type()
+	if decodertype == 'torchaudio':
+		from torchaudio.models.decoder import ctc_decoder
+		# https://pytorch.org/audio/2.3.0/generated/torchaudio.models.decoder.ctc_decoder.html#torchaudio.models.decoder.ctc_decoder
+		return ctc_decoder(
+			lexicon=None,  # or specify a lexicon if needed
+			tokens=char_list,
+			lm=None,  # Language model, if any
+			nbest=1,  # Number of best hypotheses to return
+			beam_size=30,  # Beam search size (Zeyer et al., 2017).
+			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
+			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
+			blank_token = char_list[0],
+			sil_token = char_list[0]
+		)
+		# https://arxiv.org/abs/1412.5567
+	elif decodertype == "pyctcdecode":
+		from pyctcdecode import build_ctcdecoder
+		return build_ctcdecoder(
+			labels=char_list,
+			kenlm_model_path=None,
+			alpha=0,
+			beta=0,
+			
+			# beam_width=30,
+			# num_cpus=4,
+		)
+	elif decodertype == "ctcdecode":
+		from ctcdecode import CTCBeamDecoder
+		return CTCBeamDecoder(
+			char_list,
+			model_path=None,
+			alpha=0,
+			beta=0,
+			cutoff_top_n=40,
+			cutoff_prob=1.0,
+			beam_width=30,
+			num_processes=4,
+			blank_id=0,
+			log_probs_input=False,
+		)
+	else:
+		raise Exception(f"Decoder {decodertype} does not exist")
+
+def get_dataset(data_name):
+	if args.data_name == 'GRID':
+		print("Selected GRID Dataset")
+		train_data = GRID_Dataset(
+			data=args.data,
+			mode=args.mode,
+			min_window_size=args.min_window_size,
+			max_window_size=args.max_window_size,
+			max_v_timesteps=args.max_timesteps,
+			augmentations=args.augmentations
+		)
+	elif args.data_name == 'LRS2':
+		train_data = LRS2_Dataset(
+			data=args.data,
+			mode=args.mode,
+			min_window_size=args.min_window_size,
+			max_window_size=args.max_window_size,
+			max_v_timesteps=args.max_timesteps,
+			augmentations=args.augmentations,
+		)
+	elif args.data_name == 'LRS3':
+		train_data = LRS3_Dataset(
+			data=args.data,
+			mode=args.mode,
+			min_window_size=args.min_window_size,
+			max_window_size=args.max_window_size,
+			max_v_timesteps=args.max_timesteps,
+			augmentations=args.augmentations,
+		)
+	else:
+		print(f"WARNING: Data name {args.data_name} not recognized")
+		train_data = None
+	return train_data
+
+
+
+def get_shape(tensor):
+	shapes = []
+	sub_tensor = tensor
+	while True:
+		try:
+			shapes.append(str(len(sub_tensor)))
+			sub_tensor = sub_tensor[0]
+		except Exception as ex:
+			break
+	return f"({', '.join(shapes)})"
+
+def check_package_installed(package_name):
+	# Check using pkg_resources
+	is_installed = False
+	try:
+		pkg_resources.get_distribution(package_name)
+		# print(f"{package_name} is installed (pkg_resources).")
+		is_installed = True
+	except pkg_resources.DistributionNotFound:
+		pass
+		# print(f"{package_name} is not installed (pkg_resources).")
+
+	# Check using importlib
+	try:
+		importlib.import_module(package_name)
+		# print(f"{package_name} is installed (importlib).")
+		is_installed = True
+	except ImportError:
+		pass
+		# print(f"{package_name} is not installed (importlib).")
+	return is_installed
+
+def get_decoder_type():
+	if check_package_installed("torchaudio"):
+		return "torchaudio"
+	if check_package_installed("ctcdecode"):
+		return "ctcdecode"
+	elif check_package_installed("pyctcdecode"):
+		return "pyctcdecode"
+	else:
+		print("WARNING: decoder detection failed, defaulting to pyctcdecode")
+		return "pyctcdecode"
+
+def pad_sequences(sequences, maxlen, padding_value):
+	padded_sequences = []
+	for seq in sequences:
+		seq = seq + [padding_value] * (maxlen - len(seq))
+		padded_sequences.append(seq)
+	return padded_sequences
+
+def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, blank_id):
+	decodertype = get_decoder_type()
+
+	if decodertype == "ctcdecode":
+		beam_results, beam_scores, timesteps, out_lens = decoder.decode(softmax_result)
+		beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
+	elif decodertype == "torchaudio":
+		decoded_output = decoder(softmax_result)
+		beam_results = []
+		out_lens = []
+
+		for hypotheses in decoded_output:
+			batch_beam_results = []
+			batch_out_lens = []
+			for hypothesis in hypotheses:
+				tokens = hypothesis.tokens.tolist()
+				batch_beam_results.append(tokens)
+				batch_out_lens.append(len(tokens))
+			beam_results.append(batch_beam_results)
+			out_lens.append(batch_out_lens)
+
+		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
+		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
+
+		beam_results = torch.tensor(beam_results_padded)
+		out_lens = torch.tensor(out_lens)
+
+		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
+	else:
+		raise Exception(f"Decoder {decodertype} does not exist")
+	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
+	beam_wer.extend(wer(beam_text, truth_txt))
+	return beam_text, truth_txt, beam_wer
+
+def collate_data(data, batch):
+    return data.collate_fn(batch)
 
 if __name__ == "__main__":
 	args = parse_args()
 	train_net(args)
-

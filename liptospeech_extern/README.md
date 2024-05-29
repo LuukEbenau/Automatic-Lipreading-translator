@@ -9,6 +9,23 @@ This repository contains the PyTorch implementation of the following paper:
 
 # running
 python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000012 --epochs 100 --batch_size 3 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ --output_content_loss --asr_checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_ASR.ckpt --eval_step 400 --checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/Epoch_0007_stoi_0.375_estoi_0.002_pesq_nan.ckpt --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
+
+python train.py 
+--data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID 
+--data_name GRID 
+--gpu 0 
+--workers 12 
+--lr 0.000012 
+--epochs 100 
+--batch_size 3 
+--checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ 
+--output_content_loss 
+--asr_checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_ASR.ckpt 
+--eval_step 400 
+--checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/Epoch_0007_stoi_0.375_estoi_0.002_pesq_nan.ckpt 
+--visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
+
+
 ## Requirements
 - python 3.7
 - pytorch 1.6 ~ 1.8
