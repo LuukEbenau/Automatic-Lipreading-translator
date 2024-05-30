@@ -57,7 +57,7 @@ def parse_args():
 
 	parser.add_argument("--start_epoch", type=int, default=0)
 	parser.add_argument("--augmentations", default=True)
-	parser.add_argument("--mask_prob", type=float, default=0.5)
+	parser.add_argument("--mask_prob", type=float, default=0.33)
 
 	parser.add_argument("--min_window_size", type=int, default=50)
 	parser.add_argument("--max_window_size", type=int, default=50)
@@ -71,10 +71,18 @@ def parse_args():
 	parser.add_argument("--output_content_loss", default=False, action='store_true')
 	parser.add_argument("--output_content_on", type=float, default=0.7)
 	parser.add_argument("--gpu", type=str, default='0')
+	parser.add_argument("--asr_checkpoint_type", type=str, default="LRS2", help="LRS2, HUBERT")
 
 	parser.add_argument("--samplerate", type=int, default=16000)
 	args = parser.parse_args()
 	return args
+
+def load_hubert_model():
+	import torchaudio
+	bundle = torchaudio.pipelines.HUBERT_BASE
+	model = bundle.get_model().cuda()
+	waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+	return model, bundle.sample_rate
 
 def train_net(args):
 	torch.backends.cudnn.deterministic = False
@@ -93,16 +101,27 @@ def train_net(args):
 	mel_layer = Mel_classifier()
 	sp_layer = Speaker_embed()
 	ctc_layer = CTC_classifier(train_data.num_characters)
-	# if args.asr_checkpoint is not None:
-	# 	asr_model = ASR_model(num_layers=6, num_attention_heads=4, num_class=train_data.num_characters)
-	# else:
-	# 	asr_model = None
+
+	sampling_rate = None
+	if args.asr_checkpoint is not None:
+		if args.asr_checkpoint_type == "HUBERT":
+			model, sampling_rate = load_hubert_model()
+			pass
+		elif args.asr_checkpoint_type == "LRS2":
+			asr_model = ASR_model(num_layers=6, num_attention_heads=4, num_class=train_data.num_characters)
+		else:
+			print("WARNING: no ASR selected")
+			asr_model = None
+	else:
+		print("WARNING: no ASR selected")
+		asr_model = None
 
 	# since we got a new dataset, we have to retrain the ASR :(
-	if args.asr_checkpoint is not None:
-		asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
-	else:
-		asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
+	
+	# if args.asr_checkpoint is not None:
+	# 	asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
+	# else:
+	# 	asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
 
 
 	if args.visual_front_checkpoint is not None:
@@ -149,9 +168,9 @@ def train_net(args):
 			asr_model = DP(asr_model)
 
 	# _ = validate(v_front, mel_layer, post, sp_layer, fast_validate=True)
-	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args)
+	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args, sampling_rate = sampling_rate)
 
-def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args):
+def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, sampling_rate = None):
 	best_val_stoi = 0
 	writer = SummaryWriter(comment=os.path.split(args.checkpoint_dir)[-1])
 
@@ -159,10 +178,10 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	mel_layer.train()
 	sp_layer.train()
 	ctc_layer.train()
-	# if args.asr_checkpoint is not None:
-	# 	asr_model.eval()
+	if args.asr_checkpoint is not None:
+		asr_model.eval()
 	# else:
-	asr_model.train() # I added this, so basically if we dont use a treshhold its gonna be training
+	# asr_model.train() # I added this, so basically if we dont use a treshhold its gonna be training
 
 	collate_fn_partial = partial(collate_data, train_data)
 	dataloader = DataLoader(
@@ -491,7 +510,7 @@ def load_decoder(char_list):
 	if decodertype == 'torchaudio':
 		from torchaudio.models.decoder import ctc_decoder
 		# https://pytorch.org/audio/2.3.0/generated/torchaudio.models.decoder.ctc_decoder.html#torchaudio.models.decoder.ctc_decoder
-		print(f"Blank token is {char_list[3]}")
+		print(f"SIL token is {char_list[3]}")
 		return ctc_decoder(
 			lexicon=None,  # or specify a lexicon if needed
 			tokens=char_list,
@@ -500,8 +519,8 @@ def load_decoder(char_list):
 			beam_size=30,  # Beam search size (Zeyer et al., 2017).
 			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
 			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
-			blank_token = char_list[3], # should be sil character
-			sil_token = char_list[0]
+			blank_token = char_list[0], # should be sil character
+			sil_token = char_list[3]
 		)
 		# https://arxiv.org/abs/1412.5567
 	elif decodertype == "pyctcdecode":
