@@ -34,6 +34,7 @@ import importlib
 
 # 3. replace mel_layer with flow matching 
 # calculate diffusion loss
+# https://pytorch.org/audio/main/generated/torchaudio.pipelines.Wav2Vec2Bundle.html#torchaudio.pipelines.Wav2Vec2Bundle
 
 
 def parse_args():
@@ -92,10 +93,17 @@ def train_net(args):
 	mel_layer = Mel_classifier()
 	sp_layer = Speaker_embed()
 	ctc_layer = CTC_classifier(train_data.num_characters)
+	# if args.asr_checkpoint is not None:
+	# 	asr_model = ASR_model(num_layers=6, num_attention_heads=4, num_class=train_data.num_characters)
+	# else:
+	# 	asr_model = None
+
+	# since we got a new dataset, we have to retrain the ASR :(
 	if args.asr_checkpoint is not None:
-		asr_model = ASR_model(num_layers=6, num_attention_heads=4, num_class=train_data.num_characters)
+		asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
 	else:
-		asr_model = None
+		asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
+
 
 	if args.visual_front_checkpoint is not None:
 		print(f"Loading checkpoint: {args.visual_front_checkpoint}")
@@ -151,8 +159,10 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	mel_layer.train()
 	sp_layer.train()
 	ctc_layer.train()
-	if args.asr_checkpoint is not None:
-		asr_model.eval()
+	# if args.asr_checkpoint is not None:
+	# 	asr_model.eval()
+	# else:
+	asr_model.train() # I added this, so basically if we dont use a treshhold its gonna be training
 
 	collate_fn_partial = partial(collate_data, train_data)
 	dataloader = DataLoader(
