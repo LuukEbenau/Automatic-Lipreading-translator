@@ -1,38 +1,32 @@
-
 import cv2
 import argparse
-
 from preprocess import preprocess_video
 import os
 import shutil
 
 def parse_args():
 	parser = argparse.ArgumentParser()
-	# Include additional arguments if needed
-	parser.add_argument('--output', type=str, default='output2.txt', help='Output file to write the coordinates')
-	parser.add_argument('--data_dir', type=str, default='/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/grid/train/main/s1', help='Output file to write the coordinates')
+	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, PROCESS_VIDEOS")
+	parser.add_argument('--outputfilename', type=str, default='output.txt', help='Output file to write the coordinates')
+	parser.add_argument('--input_dir', type=str, default=None, help='Output file to write the coordinates')
+	parser.add_argument("--output_dir", default=None, type=str,help= "output")
+	parser.add_argument("--video_ext", type=str, default="mpg")
+	parser.add_argument("--audio_ext", type=str, default="wav")
 
 	# for preprocessing
-	parser.add_argument('--unseenfile', action='store_true')
-	parser.add_argument('--extractaudio', action='store_true')
-	parser.add_argument('--movefiles', action='store_true')
-	parser.add_argument('--trainlm', action='store_true')
 	args = parser.parse_args()
 	return args
 
-def main(args):
-		# Define the video file path and the output path for bounding boxes
-		output_path = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/outputs/'
-		# video_file_path = 'swwc7a.mpg' 
-		# video_path = args.data_dir + '/' + video_file_path
-		# identifier = video_path.split('/')[-1].split('.')[0]  # This will be the video identifier without file extension
+def process_videos(args):
+		output_path = args.output_dir if output_dir != None else '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/outputs/'
 
-		preprocess_video(args.data_dir, 'mpg', output_path, args.output)
+		preprocess_video(args.input_dir, 'mpg', output_path, args.outputfilename)
 
-def process_unseen_file():
-	unseen_train_file = "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/unseen_train.txt"
-	# unseen_test_file = "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/unseen_test.txt"
-	# unseen_val_file = "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/unseen_val.txt"
+def process_unseen_file(args):
+	input_dir = args.input_dir if args.input_dir != None else "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
+	unseen_train_file = input_dir+"unseen_train.txt"
+	unseen_test_file = input_dir+"unseen_test.txt"
+	unseen_val_file = input_dir+"unseen_val.txt"
 
 	preprocess_pretrain_file = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/GRID_crop/preprocess_pretrain.txt'
 
@@ -43,17 +37,21 @@ def process_unseen_file():
 				fn = line.strip().split('/')[0].split('.')[0]
 				identifier = 'pretrain/'+fn
 				wf.write(identifier+'\n')
-				# print('file name part is',fn)
 
+def move_files(args):
+	"""Moves video+transcription files from one folder to another
 
+	Args:
+			args (_type_): _description_
+	"""
+	input_dir = args.input_dir if args.input_dir != None else "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/grid/main/s1/"
+	output_dir = args.output_dir if args.output_dir != None else "datasets/grid/pretrain/"
 
-def move_files():
-	from_dir = "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/grid/main/s1/"
-	to_dir = "datasets/grid/pretrain/"
+	# Put this in the args maybe, or just change inline
 	files_to_move_file = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/unseen_train.txt'
 	
 	# Ensure the target directory exists
-	os.makedirs(to_dir, exist_ok=True)
+	os.makedirs(output_dir, exist_ok=True)
 
 	# Read the list of files to move
 	with open(files_to_move_file, 'r') as file:
@@ -65,30 +63,31 @@ def move_files():
 		pattern = file_id + '*'  # Pattern to match all files starting with the file_id
 
 		# Find all matching files and move them
-		for filename in os.listdir(from_dir):
+		for filename in os.listdir(input_dir):
 			if filename.startswith(file_id):
-				src_path = os.path.join(from_dir, filename)
+				src_path = os.path.join(input_dir, filename)
 				dst_path = os.path.join(to_dir, filename)
 				shutil.move(src_path, dst_path)
 				print(f"Moved: {src_path} -> {dst_path}")
 
 
-def extract_audio():
+def extract_audio(args):
 	"""This function is not used right now, since we got the audio files predelivered. but in case we want to change samlingrate, etc. this might be useful!
 	"""
-	from_dir = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/pretrain/'
-	to_dir = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID_audio/pretrain/'
-	from_ext = 'mpg'
-	to_ext = 'wav'
+	input_dir = args.input_dir if args.input_dir != None else '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/pretrain/'
+	
+	output_dir = args.output_dir if args.output_dir != None else '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID_audio/pretrain/'
+	from_ext = args.video_ext
+	to_ext = args.audio_ext 
 
 	# Ensure the target directory exists
-	os.makedirs(to_dir, exist_ok=True)
+	os.makedirs(output_dir, exist_ok=True)
 	import ffmpeg
 	# Loop through all files in the from_dir
-	for filename in os.listdir(from_dir):
+	for filename in os.listdir(input_dir):
 		if filename.endswith(from_ext):
-			full_file_path = os.path.join(from_dir, filename)
-			output_file_path = os.path.join(to_dir, os.path.splitext(filename)[0] + '.' + to_ext)
+			full_file_path = os.path.join(input_dir, filename)
+			output_file_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '.' + to_ext)
 			
 			try:
 				(
@@ -101,7 +100,7 @@ def extract_audio():
 			except Exception as e:
 				print(f"Failed to extract audio from {filename}. Error: {e}")
 
-import glob
+
 
 def extract_words_from_file(file_path):
 	words = []
@@ -112,9 +111,11 @@ def extract_words_from_file(file_path):
 				word = parts[2]
 				# if word != "sil":
 				words.append(word)
+
 	return words
 
 def extract_words_from_folder(folder_path):
+	import glob
 	all_words = []
 	for file_path in glob.glob(os.path.join(folder_path, '**', '*.align'), recursive=True):
 		words = extract_words_from_file(file_path)
@@ -127,32 +128,27 @@ def write_words_to_file(words, output_file_path):
 			file.write(word + '\n')
 
 def tokenize_words(unique_words, model_prefix):
+	import sentencepiece as spm
 	with open(f'{model_prefix}.temp.txt', 'w') as f:
 		f.write('\n'.join(unique_words))
 
-	# Train the SentencePiece model on unique words
-	import sentencepiece as spm
 	spm.SentencePieceTrainer.train(input=f'{model_prefix}.temp.txt', model_prefix=model_prefix, vocab_size=54, user_defined_symbols=['sil'])
 
-	# Load the model
 	sp = spm.SentencePieceProcessor()
 	sp.load(f'{model_prefix}.model')
 
-	# Tokenize the words
 	tokenized_words = [sp.encode_as_pieces(word) for word in unique_words]
 
 	return tokenized_words
 
+def train_language_model_GRID(args):
+	output_dir = args.output_dir if args.output_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
+	input_dir = args.input_dir if args.input_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/alignments/alignments/"
 
-
-def train_language_model_GRID():
-	output_dir = "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
-	alignments_dir = "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/alignments/alignments/"
-	words = extract_words_from_folder(alignments_dir)
+	words = extract_words_from_folder(input_dir)
 	print(f"Number of words: {len(words)}")
 	words_set = set(words)
 	print(f"Number of unique words {len(words_set)}")
-
 
 	tokenize_words(words_set, output_dir+"grid_lower")
 
@@ -160,13 +156,16 @@ def train_language_model_GRID():
 
 if __name__ == "__main__":
 	args = parse_args()
-	if args.unseenfile:
-		process_unseen_file()
-	elif args.extractaudio:
-		extract_audio()
-	elif args.movefiles:
-		move_files()
-	elif args.trainlm:
-		train_language_model_GRID()
+	if args.action == "EXTRACT_AUDIO":
+		extract_audio(args)
+	elif args.action == "CREATE_UNSEEN_FILE":
+		process_unseen_file(args)
+	elif args.action == "MOVE_FILES":
+		move_files(args)
+	elif args.action == "PROCESS_VIDEOS":
+		process_videos(args)
+	elif args.action == "TRAIN_LM":
+		train_language_model_GRID(args)
 	else:
-		main(args)
+		print(f"invalid action selected: {args.action}")
+		
