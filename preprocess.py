@@ -6,10 +6,10 @@ import shutil
 
 def parse_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, PROCESS_VIDEOS")
-	parser.add_argument('--outputfilename', type=str, default='output.txt', help='Output file to write the coordinates')
+	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, CREATE_MOUTH_CROPS")
+	parser.add_argument('--outputfilename', type=str, help='Output file to write the coordinates')
 	parser.add_argument('--input_dir', type=str, default=None, help='Output file to write the coordinates')
-	parser.add_argument("--output_dir", default=None, type=str,help= "output")
+	parser.add_argument("--output_dir", default="./outputs/", type=str,help= "output")
 	parser.add_argument("--video_ext", type=str, default="mpg")
 	parser.add_argument("--audio_ext", type=str, default="wav")
 
@@ -17,17 +17,21 @@ def parse_args():
 	args = parser.parse_args()
 	return args
 
-def process_videos(args):
-		output_path = args.output_dir if output_dir != None else '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/outputs/'
+def crop_mouth(args):
+	assert args.outputfilename != None, "please supply --outputfilename <output.txt>"
+	output_path = args.output_dir
 
-		preprocess_video(args.input_dir, 'mpg', output_path, args.outputfilename)
+	preprocess_video(args.input_dir, args.video_ext, output_path, args.outputfilename)
 
 def process_unseen_file(args):
-	input_dir = args.input_dir if args.input_dir != None else "/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
+	assert args._input_dir != None, "Please supply a --input_dir, to something like /liptospeech_extern/data/GRID/"
+	input_dir = args.input_dir
+
 	unseen_train_file = input_dir+"unseen_train.txt"
 	unseen_test_file = input_dir+"unseen_test.txt"
 	unseen_val_file = input_dir+"unseen_val.txt"
 
+	# Hard coded, make argument?
 	preprocess_pretrain_file = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/GRID_crop/preprocess_pretrain.txt'
 
 	with open(unseen_train_file, 'w') as wf:
@@ -162,8 +166,8 @@ if __name__ == "__main__":
 		process_unseen_file(args)
 	elif args.action == "MOVE_FILES":
 		move_files(args)
-	elif args.action == "PROCESS_VIDEOS":
-		process_videos(args)
+	elif args.action == "CREATE_MOUTH_CROPS":
+		crop_mouth(args)
 	elif args.action == "TRAIN_LM":
 		train_language_model_GRID(args)
 	else:
