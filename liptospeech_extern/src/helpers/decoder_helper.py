@@ -83,6 +83,8 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
 		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
 
+		#TODO:  sourceTensor.clone().detach() 
+		#  sourceTensor.clone().detach().requires_grad_(True),
 		beam_results = torch.tensor(beam_results_padded)
 		out_lens = torch.tensor(out_lens)
 
