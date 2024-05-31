@@ -272,7 +272,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 				writer.add_scalar('train/ctc_loss', ctc_loss.cpu(), step)
 				writer.add_scalar('train/g_ctc_loss', gen_ctc_loss.cpu(), step)
 				if i % 100 == 0:
-					print(f'######## Step(Epoch): {step}({epoch}), Recon Loss: {recon_loss.cpu().item()} #########')
+					print(f'######## Step(Epoch): {step}({epoch}), Recon Loss: {recon_loss.cpu().item()}, Ctc loss: {ctc_loss.cpu()}, ASR loss {gen_ctc_loss.cpu()} #########')
 					for (predict, truth) in list(zip(beam_text, truth_txt))[:3]:
 						print(f'VP: {predict.upper()}')
 						print(f'GT: {truth.upper()}\n') # Ground truth
@@ -327,36 +327,8 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 		mel_layer.eval()
 		sp_layer.eval()
 
-		if args.data_name == 'GRID':
-			val_data = GRID_Dataset(
-				data=args.data,
-				mode='val',
-				min_window_size=args.min_window_size,
-				max_window_size=args.max_window_size,
-				max_v_timesteps=args.max_timesteps,
-				augmentations=args.augmentations
-			)
-		elif args.data_name == 'LRS2':
-			val_data = LRS2_Dataset(
-				data=args.data,
-				mode='val',
-				min_window_size=args.min_window_size,
-				max_window_size=args.max_window_size,
-				max_v_timesteps=args.max_timesteps,
-				augmentations=args.augmentations,
-			)
-		elif args.data_name == 'LRS3':
-			val_data = LRS3_Dataset(
-				data=args.data,
-				mode='val',
-				min_window_size=args.min_window_size,
-				max_window_size=args.max_window_size,
-				max_v_timesteps=args.max_timesteps,
-				augmentations=args.augmentations,
-			)
-		else:
-			print(f"WARNING: Data name {args.data_name} not recognized")
-		
+		val_data = get_dataset(args, val=True)
+
 		collate_fn_partial = partial(collate_data, val_data)
 		dataloader = DataLoader(
 			val_data,

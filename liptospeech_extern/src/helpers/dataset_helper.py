@@ -2,12 +2,12 @@ from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
 from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
 from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
 
-def get_dataset(args):
+def get_dataset(args, val = False):
 	if args.data_name == 'GRID':
 		print("Selected GRID Dataset")
 		train_data = GRID_Dataset(
 			data=args.data,
-			mode=args.mode,
+			mode= args.mode if not val else "val",
 			min_window_size=args.min_window_size,
 			max_window_size=args.max_window_size,
 			max_v_timesteps=args.max_timesteps,

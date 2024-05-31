@@ -28,7 +28,7 @@ python train.py
 
 ## you can run the following command:
 ```
-python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000012 --epochs 200 --batch_size 4 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 404 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
+python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000012 --epochs 200 --batch_size 2 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 410 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
 ```
 
 ## Requirements
