@@ -8,26 +8,28 @@ This repository contains the PyTorch implementation of the following paper:
 <div align="center"><img width="30%" src="img/Img.PNG?raw=true" /></div>
 
 # running
-python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000012 --epochs 100 --batch_size 4 --eval_step 410 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
-
---output_content_loss
---checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/
-
+use the following parameters
+```
 python train.py 
 --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID 
 --data_name GRID 
 --gpu 0 
 --workers 12 
 --lr 0.000012 
---epochs 100 
---batch_size 3 
+--epochs 200 
+--batch_size 4 
 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ 
 --output_content_loss 
---asr_checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_ASR.ckpt 
---eval_step 400 
---checkpoint D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/Epoch_0007_stoi_0.375_estoi_0.002_pesq_nan.ckpt 
+--asr_checkpoint "openai/whisper-tiny.en"
+--asr_checkpoint_type WHISPER 
+--eval_step 404 
 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
+```
 
+## you can run the following command:
+```
+python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.000012 --epochs 200 --batch_size 4 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/checkpoints/ --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 404 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/pretrained/LRS3_front_PT.ckpt
+```
 
 ## Requirements
 - python 3.7

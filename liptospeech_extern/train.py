@@ -1,41 +1,41 @@
-import argparse
-import random
-import torch
-from torch import nn, optim
-from torch.utils.tensorboard import SummaryWriter
-import numpy as np
-from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
-from src.models.asr_model import ASR_model
-import editdistance
 import os
-from torch.utils.data import DataLoader
-from torch.nn import functional as F
-from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
-from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
-from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
-from torch.nn import DataParallel as DP
-import torch.nn.parallel
 import time
 import glob
+import copy
+import random
+import argparse
+from functools import partial
+
+import numpy as np
+import torch
+from torch import nn, optim
 from torch.autograd import grad
+from torch.nn import functional as F
+from torch.nn import DataParallel as DP
+import torch.nn.parallel
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+import librosa
 from pesq import pesq
 from pystoi import stoi
 from matplotlib import pyplot as plt
-import copy
-import librosa
-from functools import partial
 import tqdm
-import pkg_resources
-import importlib
+
+from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
+from src.models.asr_model import ASR_model
+#NOTE: These are functions i wrote myself, as convenience and to not clutter the train.py file
+from src.helpers import decode_with_decoder, get_dataset, get_shape, load_decoder, wer, calculate_whisper_content_loss, get_asr_model, log_time
 
 # TODO LIST:
 # 1. Create vocabolary from dataset
 # 2. fix CTCdecoder blank token
 
+# diff_loss, _ = self.decoder.compute_loss(x1=y, mask=y_mask, mu=mu_y, spks=spks, cond=cond)
 # 3. replace mel_layer with flow matching 
+# Compute loss of the decoder after mel layer
 # calculate diffusion loss
 # https://pytorch.org/audio/main/generated/torchaudio.pipelines.Wav2Vec2Bundle.html#torchaudio.pipelines.Wav2Vec2Bundle
-
 
 def parse_args():
 	parser = argparse.ArgumentParser()
@@ -57,7 +57,7 @@ def parse_args():
 
 	parser.add_argument("--start_epoch", type=int, default=0)
 	parser.add_argument("--augmentations", default=True)
-	parser.add_argument("--mask_prob", type=float, default=0.33)
+	parser.add_argument("--mask_prob", type=float, default=0.4)
 
 	parser.add_argument("--min_window_size", type=int, default=50)
 	parser.add_argument("--max_window_size", type=int, default=50)
@@ -71,18 +71,11 @@ def parse_args():
 	parser.add_argument("--output_content_loss", default=False, action='store_true')
 	parser.add_argument("--output_content_on", type=float, default=0.7)
 	parser.add_argument("--gpu", type=str, default='0')
-	parser.add_argument("--asr_checkpoint_type", type=str, default="LRS2", help="LRS2, HUBERT")
+	parser.add_argument("--asr_checkpoint_type", type=str, default="LRS2", help="LRS2, HUBERT, WHISPER")
 
 	parser.add_argument("--samplerate", type=int, default=16000)
 	args = parser.parse_args()
 	return args
-
-def load_hubert_model():
-	import torchaudio
-	bundle = torchaudio.pipelines.HUBERT_BASE
-	model = bundle.get_model().cuda()
-	waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
-	return model, bundle.sample_rate
 
 def train_net(args):
 	torch.backends.cudnn.deterministic = False
@@ -93,7 +86,7 @@ def train_net(args):
 	os.environ['OMP_NUM_THREADS'] = '6' #it was 2, can i make it bigger? 2
 	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-	train_data = get_dataset(args.data_name)
+	train_data = get_dataset(args)
 
 	v_front = Visual_front(in_channels=1, conf_layer=args.conf_layer, num_head=args.num_head)
 
@@ -102,27 +95,8 @@ def train_net(args):
 	sp_layer = Speaker_embed()
 	ctc_layer = CTC_classifier(train_data.num_characters)
 
-	sampling_rate = None
-	if args.asr_checkpoint is not None:
-		if args.asr_checkpoint_type == "HUBERT":
-			model, sampling_rate = load_hubert_model()
-			pass
-		elif args.asr_checkpoint_type == "LRS2":
-			asr_model = ASR_model(num_layers=6, num_attention_heads=4, num_class=train_data.num_characters)
-		else:
-			print("WARNING: no ASR selected")
-			asr_model = None
-	else:
-		print("WARNING: no ASR selected")
-		asr_model = None
-
-	# since we got a new dataset, we have to retrain the ASR :(
-	
-	# if args.asr_checkpoint is not None:
-	# 	asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
-	# else:
-	# 	asr_model = ASR_model(num_layers=3, num_attention_heads=4, num_class=train_data.num_characters)
-
+	# Load asr model
+	asr_model = get_asr_model(args.asr_checkpoint_type, args.asr_checkpoint,train_data.num_characters)
 
 	if args.visual_front_checkpoint is not None:
 		print(f"Loading checkpoint: {args.visual_front_checkpoint}")
@@ -139,7 +113,7 @@ def train_net(args):
 		sp_layer.load_state_dict(checkpoint['sp_layer_state_dict'])
 		del checkpoint
 
-	if args.asr_checkpoint is not None:
+	if args.asr_checkpoint is not None and args.asr_checkpoint_type == "LRS2" or args.asr_checkpoint_type == "LRS3":
 		print(f"Loading ASR checkpoint: {args.asr_checkpoint}")
 		checkpoint = torch.load(args.asr_checkpoint, map_location=lambda storage, loc: storage.cuda())
 		asr_model.load_state_dict(checkpoint['asr_model_state_dict'])
@@ -168,9 +142,12 @@ def train_net(args):
 			asr_model = DP(asr_model)
 
 	# _ = validate(v_front, mel_layer, post, sp_layer, fast_validate=True)
-	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args, sampling_rate = sampling_rate)
+	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args, samplerate = args.samplerate)
 
-def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, sampling_rate = None):
+def collate_data(data, batch):
+    return data.collate_fn(batch)
+
+def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = None):
 	best_val_stoi = 0
 	writer = SummaryWriter(comment=os.path.split(args.checkpoint_dir)[-1])
 
@@ -180,8 +157,6 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 	ctc_layer.train()
 	if args.asr_checkpoint is not None:
 		asr_model.eval()
-	# else:
-	# asr_model.train() # I added this, so basically if we dont use a treshhold its gonna be training
 
 	collate_fn_partial = partial(collate_data, train_data)
 	dataloader = DataLoader(
@@ -246,31 +221,29 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			gen_v_len = torch.tensor(gen_v_len).unsqueeze(1)
 
 			gen_mel = mel_layer(gen_v_feat, sp_feat)  # B,1,80,4S
-			# print(f"video shape: {get_shape(vid_len)}")
-			# print(f"max window size: {max_window_size}")
-			# print(f"shape mel layer: {get_shape(gen_mel)}")
-			# print(f"shape gen_v_feat: {get_shape(gen_v_feat)}")
-			# print(f"shape sp_feat: {get_shape(sp_feat)}")
-			# print(f"shape mel_masks: {get_shape(mel_masks)}")
-			# print(vid_len[0])
-
-			#TODO: # Compute loss of the decoder
-			# diff_loss, _ = self.decoder.compute_loss(x1=y, mask=y_mask, mu=mu_y, spks=spks, cond=cond)
-
 			gen_mel = gen_mel * mel_masks
 
-			if args.asr_checkpoint is not None and args.output_content_loss:
-				_, gen_ctc_feat = asr_model(gen_mel, gen_v_len)
-				_, real_ctc_feat = asr_model(mel.cuda(), gen_v_len)
-
 			################################### GEN ########################################
+			if args.asr_checkpoint is not None and args.output_content_loss:
+				if args.asr_checkpoint_type == "LRS2" or args.asr_checkpoint_type == "LRS3":
+					_, gen_ctc_feat = asr_model(gen_mel.cuda(), gen_v_len)
+					_, real_ctc_feat = asr_model(mel, gen_v_len)
+					gen_ctc_loss = F.mse_loss(gen_ctc_feat, real_ctc_feat)
+
+				elif args.asr_checkpoint_type == "WHISPER":
+					# with log_time("CALCULATING WHISPER LOSS"):
+					# wav_pred = train_data.inverse_mel(gen_mel.cuda().detach(), mel_len, stft)  # 1, 80, T
+					# wav_gt = train_data.inverse_mel(mel.cuda().detach(), mel_len, stft)
+					gen_ctc_loss = calculate_whisper_content_loss(mel.cuda(), gen_mel.cuda(), asr_model, train_data.char_list)
+					# print("Whisper content loss:", gen_ctc_loss)
+				else:
+					gen_ctc_loss = torch.zeros(1).cuda()
+			else:
+				gen_ctc_loss = torch.zeros(1).cuda()
+
 			recon_loss = criterion(train_data.denormalize(gen_mel), train_data.denormalize(mel.cuda()))
 
 			ctc_loss = CTC_criterion(ctc_pred.transpose(0, 1).log_softmax(2), target.cuda(), vid_len, target_len) / vid.size(0)
-			if args.asr_checkpoint is not None and args.output_content_loss:
-				gen_ctc_loss = F.mse_loss(gen_ctc_feat, real_ctc_feat)
-			else:
-				gen_ctc_loss = torch.zeros(1).cuda()
 
 			gen_loss = 100.0 * recon_loss + ctc_loss + gen_ctc_loss
 
@@ -347,7 +320,6 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			args.output_content_loss = True
 
 	print('Finishing training')
-
 
 def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, writer=None):
 	with torch.no_grad():
@@ -436,8 +408,15 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=False))
 				estoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=True))
 				try:
+					wav_tr_resampled = librosa.resample(wav_tr[_][:min_len].numpy(), args.samplerate, 8000)
+					wav_pred_resampled = librosa.resample(wav_pred[_][:min_len], args.samplerate, 8000)			
 
-					pesq_list.append(pesq(8000, librosa.resample(wav_tr[_][:min_len].numpy(), args.samplerate, 8000), librosa.resample(wav_pred[_][:min_len], args.samplerate, 8000), 'nb'))
+					print(f"Shape of wav_tr_resampled: {get_shape(wav_tr_resampled)}, Shape of wav_pred_resampled: {get_shape(wav_pred_resampled)}")
+					print(wav_tr_resampled[0])
+					print(wav_pred_resampled[0])
+					pesq_score = pesq(8000, wav_tr_resampled, wav_pred_resampled , 'nb')
+
+					pesq_list.append(pesq_score)
 				except:
 					pass
 
@@ -489,190 +468,8 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 		return np.mean(np.array(val_loss)), np.mean(np.array(stoi_list)), np.mean(np.array(estoi_list)), np.mean(np.array(pesq_list))
 
 
-def wer(predict, truth):
-	word_pairs = [(p[0].split(' '), p[1].split(' ')) for p in zip(predict, truth)]
-	wer = [1.0 * editdistance.eval(p[0], p[1]) / len(p[1]) for p in word_pairs]
-	return wer
-
-def load_decoder(char_list):
-	"""Load decoder based on installed software
-
-	Args:
-			char_list (string[]): tokens for the decoder, its a array of ngrams
-
-	Raises:
-			Exception: _description_
-
-	Returns:
-			decoder: decoder instance
-	"""
-	decodertype = get_decoder_type()
-	if decodertype == 'torchaudio':
-		from torchaudio.models.decoder import ctc_decoder
-		# https://pytorch.org/audio/2.3.0/generated/torchaudio.models.decoder.ctc_decoder.html#torchaudio.models.decoder.ctc_decoder
-		print(f"SIL token is {char_list[3]}")
-		return ctc_decoder(
-			lexicon=None,  # or specify a lexicon if needed
-			tokens=char_list,
-			lm=None,  # Language model, if any
-			nbest=1,  # Number of best hypotheses to return
-			beam_size=30,  # Beam search size (Zeyer et al., 2017).
-			beam_threshold=80,  # Beam threshold (Graves et al., 2006).
-			log_add=True , # Use log-add operation in beam search (Williams et al., 2006).
-			blank_token = char_list[0], # should be sil character
-			sil_token = char_list[3]
-		)
-		# https://arxiv.org/abs/1412.5567
-	elif decodertype == "pyctcdecode":
-		from pyctcdecode import build_ctcdecoder
-		return build_ctcdecoder(
-			labels=char_list,
-			kenlm_model_path=None,
-			alpha=0,
-			beta=0,
-			
-			# beam_width=30,
-			# num_cpus=4,
-		)
-	elif decodertype == "ctcdecode":
-		from ctcdecode import CTCBeamDecoder
-		return CTCBeamDecoder(
-			char_list,
-			model_path=None,
-			alpha=0,
-			beta=0,
-			cutoff_top_n=40,
-			cutoff_prob=1.0,
-			beam_width=30,
-			num_processes=4,
-			blank_id=0,
-			log_probs_input=False,
-		)
-	else:
-		raise Exception(f"Decoder {decodertype} does not exist")
-
-def get_dataset(data_name):
-	if args.data_name == 'GRID':
-		print("Selected GRID Dataset")
-		train_data = GRID_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations
-		)
-	elif args.data_name == 'LRS2':
-		train_data = LRS2_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations,
-		)
-	elif args.data_name == 'LRS3':
-		train_data = LRS3_Dataset(
-			data=args.data,
-			mode=args.mode,
-			min_window_size=args.min_window_size,
-			max_window_size=args.max_window_size,
-			max_v_timesteps=args.max_timesteps,
-			augmentations=args.augmentations,
-		)
-	else:
-		print(f"WARNING: Data name {args.data_name} not recognized")
-		train_data = None
-	return train_data
 
 
-
-def get_shape(tensor):
-	shapes = []
-	sub_tensor = tensor
-	while True:
-		try:
-			shapes.append(str(len(sub_tensor)))
-			sub_tensor = sub_tensor[0]
-		except Exception as ex:
-			break
-	return f"({', '.join(shapes)})"
-
-def check_package_installed(package_name):
-	# Check using pkg_resources
-	is_installed = False
-	try:
-		pkg_resources.get_distribution(package_name)
-		# print(f"{package_name} is installed (pkg_resources).")
-		is_installed = True
-	except pkg_resources.DistributionNotFound:
-		pass
-		# print(f"{package_name} is not installed (pkg_resources).")
-
-	# Check using importlib
-	try:
-		importlib.import_module(package_name)
-		# print(f"{package_name} is installed (importlib).")
-		is_installed = True
-	except ImportError:
-		pass
-		# print(f"{package_name} is not installed (importlib).")
-	return is_installed
-
-def get_decoder_type():
-	if check_package_installed("torchaudio"):
-		return "torchaudio"
-	if check_package_installed("ctcdecode"):
-		return "ctcdecode"
-	elif check_package_installed("pyctcdecode"):
-		return "pyctcdecode"
-	else:
-		print("WARNING: decoder detection failed, defaulting to pyctcdecode")
-		return "pyctcdecode"
-
-def pad_sequences(sequences, maxlen, padding_value):
-	padded_sequences = []
-	for seq in sequences:
-		seq = seq + [padding_value] * (maxlen - len(seq))
-		padded_sequences.append(seq)
-	return padded_sequences
-
-def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, blank_id):
-	decodertype = get_decoder_type()
-
-	if decodertype == "ctcdecode":
-		beam_results, beam_scores, timesteps, out_lens = decoder.decode(softmax_result)
-		beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
-	elif decodertype == "torchaudio":
-		decoded_output = decoder(softmax_result)
-		beam_results = []
-		out_lens = []
-
-		for hypotheses in decoded_output:
-			batch_beam_results = []
-			batch_out_lens = []
-			for hypothesis in hypotheses:
-				tokens = hypothesis.tokens.tolist()
-				batch_beam_results.append(tokens)
-				batch_out_lens.append(len(tokens))
-			beam_results.append(batch_beam_results)
-			out_lens.append(batch_out_lens)
-
-		max_len = max(max(len(seq) for seq in batch) for batch in beam_results)
-		beam_results_padded = [pad_sequences(batch, max_len, 0) for batch in beam_results]
-
-		beam_results = torch.tensor(beam_results_padded)
-		out_lens = torch.tensor(out_lens)
-
-		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
-	else:
-		raise Exception(f"Decoder {decodertype} does not exist")
-	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
-	beam_wer.extend(wer(beam_text, truth_txt))
-	return beam_text, truth_txt, beam_wer
-
-def collate_data(data, batch):
-    return data.collate_fn(batch)
 
 if __name__ == "__main__":
 	args = parse_args()
