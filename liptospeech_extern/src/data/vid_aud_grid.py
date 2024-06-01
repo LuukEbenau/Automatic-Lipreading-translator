@@ -165,7 +165,10 @@ class MultiDataset(Dataset):
         if 'pretrain' in file_path:
             content, start_sec, stop_sec = self.get_pretrain_words(content)
         else:
-            content = content.splitlines()[0][7:].strip().lower()
+            content = ""
+            for line in content.splitlines():
+                content += line.split(" ")[2] + " "
+            content = content.strip()
 
         cap = cv2.VideoCapture(file_path + f'.{self.video_ext}')
         frames = []
@@ -260,15 +263,18 @@ class MultiDataset(Dataset):
         return melspec, spec, vid, num_v_frames, audio.squeeze(0), num_a_frames, audio_length, target, target_len, start_frame, window_size, file_path.replace(self.data, '')[1:], sp_mel
 
     def get_pretrain_words(self, content):
-        lines = content.splitlines()[4:]
+        lines = content.splitlines() #4
         words = []
         for line in lines:
             start, stop, word = line.split(" ")
             # print(word,start,stop)
+            if word.lower() == "sil":
+                continue
+
             start, stop = float(start), float(stop)
             words.append([word, start, stop])
 
-        num_words = min(random.randint(4, 20), len(words))   #4 ~ 20
+        num_words = min(random.randint(4, 6), len(words))   #4 ~ 20
         word_start = random.randint(0, len(words) - num_words)
         word_end = word_start + num_words
 

@@ -16,6 +16,13 @@ from torch.nn import functional as F
 
 from .util_helper import get_shape
 ############################################## GENERAL ###############################################
+#NOTE: Found some sources which also said converting it to decibels instead of amplitude works as decibels is logarithmic, and then this would work:
+# power_to_db = librosa.power_to_db(spectrogram, ref=np.max) which I found from https://importchris.medium.com/how-to-create-understand-mel-spectrograms-ff7634991056
+def mel_to_log(mel):
+	log_spec = torch.clamp(mel, min=1e-10).log10()
+	log_spec = torch.maximum(log_spec, log_spec.max() - 8.0)
+	log_spec = (log_spec + 4.0) / 4.0
+	return log_spec
 
 # def mel_to_audio(mel_spectrogram, sr=16000):
 # 	#	TODO: this function is from librosa. Is this maybe faster than the only that they used?
@@ -58,27 +65,25 @@ def calculate_whisper_content_loss(mel, gen_mel, whisper_model, vocab_size, samp
 			gen_mel (_type_): generated mel spectrogram
 			whisper_model (_type_): whisper model
 	"""
-	# print(f"shape of mel is {get_shape(mel)}")
-	# print(f"shape of mel is {get_shape(gen_mel)}")
 
-	mel = torch.squeeze(mel, dim=1)
+	# reduce the audio channels dimension since we run it mono
+	mel = torch.squeeze(mel, dim=1) 
 	gen_mel = torch.squeeze(gen_mel, dim=1)
+	# Add padding which is required by whisper
 	mel = pad_mel_spectrogram(mel, target_length=3000)
-	gen_mel = pad_mel_spectrogram(gen_mel, target_length=3000) #  pad_mel_spectrogram(gen_mel, target_length=3000)
+	gen_mel = pad_mel_spectrogram(gen_mel, target_length=3000) 
 
-	# mel = [pad_mel_spectrogram(mel[i], target_length=3000) for i in range(len(mel))] 
-	# gen_mel = [pad_mel_spectrogram(gen_mel[i], target_length=3000) for i in range(len(mel))] #  pad_mel_spectrogram(gen_mel, target_length=3000)
+	# Transforming to log mel, since this is what whisper is expecting
+	mel = mel_to_log(mel)
+	gen_mel = mel_to_log(gen_mel)
 
 	batch_size = len(mel)
-	# print(f"Batch size is {batch_size}, and vocab size is {vocab_size}")
-	# batch_size
+	# why [1,1], and not [batch_Size,1]?
 	decoder_input_ids = torch.tensor([[1, 1]]) * whisper_model.config.decoder_start_token_id
 	decoder_input_ids = decoder_input_ids.cuda()
-	# decoder_input_ids = torch.tensor([[1, 1]]) * whisper_model.config.decoder_start_token_id
-	# decoder_input_ids=decoder_input_ids
+
 	real_output_state = whisper_model(mel, decoder_input_ids=decoder_input_ids).last_hidden_state
 	gen_output_state = whisper_model(gen_mel, decoder_input_ids=decoder_input_ids).last_hidden_state
 
 	gen_ctc_loss = F.mse_loss(real_output_state, gen_output_state)
-	# print(f"ctc log is {gen_ctc_loss}")
 	return gen_ctc_loss

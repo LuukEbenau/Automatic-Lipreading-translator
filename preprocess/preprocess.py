@@ -20,7 +20,7 @@ def extract_lip_embeddings(data_dir, input_file):
 			break
 
 		rgb_frame = frame[:, :, ::-1]
-		face_landmarks_list = face_recognition.face_landmarks(rgb_frame)
+		face_landmarks_list = face_recognition.face_landmarks(rgb_frame, model="small", cpus=8)
 
 		for face_landmarks in face_landmarks_list:
 			if 'top_lip' in face_landmarks and 'bottom_lip' in face_landmarks:

@@ -231,21 +231,18 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					gen_ctc_loss = F.mse_loss(gen_ctc_feat, real_ctc_feat)
 
 				elif args.asr_checkpoint_type == "WHISPER":
-					# with log_time("CALCULATING WHISPER LOSS"):
-					# wav_pred = train_data.inverse_mel(gen_mel.cuda().detach(), mel_len, stft)  # 1, 80, T
-					# wav_gt = train_data.inverse_mel(mel.cuda().detach(), mel_len, stft)
 					gen_ctc_loss = calculate_whisper_content_loss(mel.cuda(), gen_mel.cuda(), asr_model, train_data.char_list)
-					# print("Whisper content loss:", gen_ctc_loss)
+					gen_ctc_loss *= 10
 				else:
 					gen_ctc_loss = torch.zeros(1).cuda()
 			else:
 				gen_ctc_loss = torch.zeros(1).cuda()
 
 			recon_loss = criterion(train_data.denormalize(gen_mel), train_data.denormalize(mel.cuda()))
-
+			recon_loss *= 100.0
 			ctc_loss = CTC_criterion(ctc_pred.transpose(0, 1).log_softmax(2), target.cuda(), vid_len, target_len) / vid.size(0)
 
-			gen_loss = 100.0 * recon_loss + ctc_loss + gen_ctc_loss
+			gen_loss = recon_loss + ctc_loss + gen_ctc_loss
 
 			loss_list.append(gen_loss.cpu().item())
 			recon_loss_list.append(recon_loss.cpu().item())
@@ -300,6 +297,9 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					ctc_layer_state_dict = ctc_layer.state_dict()
 				if not os.path.exists(args.checkpoint_dir):
 					os.makedirs(args.checkpoint_dir)
+
+				print(f"Saving checkpoint Epoch_{epoch}_stoi_{stoi}_estoi_{logs[1]}_pesq_{logs[2]}.ckpt")
+
 				torch.save({'v_front_state_dict': v_state_dict, 'ctc_layer_state_dict': ctc_layer_state_dict,
 							'mel_layer_state_dict': mel_layer_state_dict, 'sp_layer_state_dict': sp_layer_state_dict},
 						   os.path.join(args.checkpoint_dir, 'Epoch_%04d_stoi_%.3f_estoi_%.3f_pesq_%.3f.ckpt' % (
@@ -438,10 +438,6 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 		print('val_estoi:', np.mean(np.array(estoi_list)))
 		print('val_pesq:', np.mean(np.array(pesq_list)))
 		return np.mean(np.array(val_loss)), np.mean(np.array(stoi_list)), np.mean(np.array(estoi_list)), np.mean(np.array(pesq_list))
-
-
-
-
 
 if __name__ == "__main__":
 	args = parse_args()
