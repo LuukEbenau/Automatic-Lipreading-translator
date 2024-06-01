@@ -25,7 +25,7 @@ import tqdm
 from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
 from src.models.asr_model import ASR_model
 #NOTE: These are functions i wrote myself, as convenience and to not clutter the train.py file
-from src.helpers import decode_with_decoder, get_dataset, get_shape, load_decoder, wer, calculate_whisper_content_loss, get_asr_model, log_time
+from src.helpers import decode_with_decoder, get_dataset, get_shape, load_decoder, wer, calculate_whisper_content_loss, get_asr_model, log_time, load_hifigan, inverse_mel
 
 # TODO LIST:
 # 1. Create vocabolary from dataset
@@ -148,6 +148,8 @@ def collate_data(data, batch):
     return data.collate_fn(batch)
 
 def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = None):
+	# hifigan, vocoder_train_setup, denoiser = load_hifigan()
+
 	best_val_stoi = 0
 	writer = SummaryWriter(comment=os.path.split(args.checkpoint_dir)[-1])
 
@@ -222,7 +224,9 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			gen_mel = mel_layer(gen_v_feat, sp_feat)  # B,1,80,4S
 			gen_mel = gen_mel * mel_masks
-
+			# print("Testing inverse mel fucntionalirt")
+			# inverse_test = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
+			# print(f"Shape of the wav is {get_shape(inverse_test)}")
 			################################### GEN ########################################
 			if args.asr_checkpoint is not None and args.output_content_loss:
 				if args.asr_checkpoint_type == "LRS2" or args.asr_checkpoint_type == "LRS3":
@@ -257,8 +261,11 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			################################### VISUALIZE & VALIDATE ########################################
 			if i % 100 == 0:
+				# wav_pred = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0]) 
 				wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
+				# wav_gt = inverse_mel(hifigan, vocoder_train_setup, denoiser, mel.detach()[0]) 
 				wav_gt = train_data.inverse_mel(mel.cuda().detach()[0], mel_len[0:1], stft)
+				
 			else:
 				wav_pred = 0
 				wav_gt = 0

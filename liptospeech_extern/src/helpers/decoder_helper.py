@@ -87,8 +87,8 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 		#  sourceTensor.clone().detach().requires_grad_(True),
 		beam_results = torch.tensor(beam_results_padded)
 		out_lens = torch.tensor(out_lens)
-
-		beam_text = [train_data.arr2txt(torch.tensor(beam_results[_][0][:out_lens[_][0]])) for _ in range(vid.size(0))]
+		# sourceTensor.clone().detach()
+		beam_text = [train_data.arr2txt(beam_results[_][0][:out_lens[_][0]]) for _ in range(vid.size(0))]
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
 	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
