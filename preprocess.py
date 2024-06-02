@@ -3,19 +3,73 @@ import argparse
 from preprocess import preprocess_video
 import os
 import shutil
-
+import glob
 def parse_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, CREATE_MOUTH_CROPS")
+	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, CREATE_MOUTH_CROPS, MOVE_MISSING_ALIGNS, SPLIT_VAL_FROM_TRAIN")
 	parser.add_argument('--outputfilename', type=str, help='Output file to write the coordinates')
 	parser.add_argument('--input_dir', type=str, default=None, help='Output file to write the coordinates')
 	parser.add_argument("--output_dir", default="./outputs/", type=str,help= "output")
 	parser.add_argument("--video_ext", type=str, default="mpg")
 	parser.add_argument("--audio_ext", type=str, default="wav")
+	parser.add_argument("--inputfile", type=str)
 
 	# for preprocessing
 	args = parser.parse_args()
 	return args
+
+def split_val_from_train_using_crops(args):
+	assert args.output_dir is not None, "Please supply an output dir"
+	assert args.input_dir is not None, "Please supply an input dir"
+	assert args.inputfile is not None, "Please supply an input filename using --inputfile"
+	
+	input_dir = args.input_dir
+	output_dir = args.output_dir
+	input_file = args.inputfile
+
+	with open(input_file, 'r') as f:
+		for line in f:
+			filename = line.split('/')[0]  # Extract the filename before the first '/'
+			video_file_path = os.path.join(input_dir, filename)
+			align_file_path = os.path.join(input_dir, f"{os.path.splitext(filename)[0]}.align")
+			
+			# Check if the video file exists in the input directory
+			if os.path.exists(video_file_path):
+				shutil.move(video_file_path, os.path.join(output_dir, filename))
+				
+				# Check if the align file exists and move it
+				if os.path.exists(align_file_path):
+					shutil.move(align_file_path, os.path.join(output_dir, f"{os.path.splitext(filename)[0]}.align"))
+				else:
+					print(f"Align file not found for {filename}")
+			else:
+				print(f"Video file not found: {filename}")
+	
+
+
+def move_video_missing_aligns_to_test(args):
+	"""Moves all files which have missing align file to the target output_dir. usually the test directory
+
+	Args:
+			args (_type_): _description_
+	"""
+	assert args.output_dir != None, "Please supply a output dir"
+	assert args.input_dir != None, "Please supply a input dir"
+	video_ext = args.video_ext
+	output_dir = args.output_dir
+
+	for file_path in glob.glob(os.path.join(args.input_dir,  f'*.{video_ext}'), recursive=False):
+		filename = os.path.basename(file_path)
+		file_prefix = filename.split('.')[0]
+		align_filename = file_prefix + ".align"
+		align_file_path = os.path.join(os.path.dirname(file_path), align_filename)
+
+		# Check if the .align file exists
+		if not os.path.exists(align_file_path):
+			# Move both files to the output directory
+			shutil.move(file_path, os.path.join(output_dir, filename))
+		else:
+			print(f"Align file found for {filename}")
 
 def crop_mouth(args):
 	assert args.outputfilename != None, "please supply --outputfilename <output.txt>"
@@ -24,23 +78,19 @@ def crop_mouth(args):
 	preprocess_video(args.input_dir, args.video_ext, output_path, args.outputfilename)
 
 def process_unseen_file(args):
-	assert args._input_dir != None, "Please supply a --input_dir, to something like /liptospeech_extern/data/GRID/"
+	assert args.input_dir is not None, "Please supply a --input_dir, to something like /liptospeech_extern/data/GRID/"
+	assert args.output_dir is not None, "Please supply a --output_dir, to something like /liptospeech_extern/data/GRID/"
 	input_dir = args.input_dir
+	output_dir = args.output_dir
 
-	unseen_train_file = input_dir+"unseen_train.txt"
-	unseen_test_file = input_dir+"unseen_test.txt"
-	unseen_val_file = input_dir+"unseen_val.txt"
+	result_file = os.path.join(output_dir, args.outputfilename) # "unseen_train.txt"
 
-	# Hard coded, make argument?
-	preprocess_pretrain_file = '/mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/GRID_crop/preprocess_pretrain.txt'
-
-	with open(unseen_train_file, 'w') as wf:
-		with open(preprocess_pretrain_file, 'r') as file:
-			for line in file:
-				# Process each line here
-				fn = line.strip().split('/')[0].split('.')[0]
-				identifier = 'pretrain/'+fn
-				wf.write(identifier+'\n')
+	with open(result_file, 'w') as f:
+		video_ext = args.video_ext
+		for file_path in glob.glob(os.path.join(input_dir, f'*.{video_ext}')):
+			filename = os.path.basename(file_path)
+			file_prefix = os.path.splitext(filename)[0]
+			f.write(f"trainval/{file_prefix}\n")
 
 def move_files(args):
 	"""Moves video+transcription files from one folder to another
@@ -170,6 +220,10 @@ if __name__ == "__main__":
 		crop_mouth(args)
 	elif args.action == "TRAIN_LM":
 		train_language_model_GRID(args)
+	elif args.action == "MOVE_MISSING_ALIGNS":
+		move_video_missing_aligns_to_test(args)
+	elif args.action == "SPLIT_VAL_FROM_TRAIN":
+		split_val_from_train_using_crops(args)
 	else:
 		print(f"invalid action selected: {args.action}")
 		

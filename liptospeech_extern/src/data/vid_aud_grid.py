@@ -47,7 +47,7 @@ class MultiDataset(Dataset):
         self.info = {}
         self.info['video_fps'] = 25
         self.info['audio_fps'] = self.samplerate
-        self.sp = spm.SentencePieceProcessor(model_file='./data/grid_lower.model') # NOTE: what is a sentence piece processor?
+        self.sp = spm.SentencePieceProcessor(model_file='./data/grid_lower.model')
         self.char_list = []
         with open('./data/grid_lower.vocab', encoding='utf-8') as f:
             print("Loading vocabalary")
@@ -115,12 +115,23 @@ class MultiDataset(Dataset):
         else:
             s = 0
         crop = []
+
+        crops = [crop for crop in crops if crop != '']
         for i in range(0, len(crops), 2):
-            left = int(crops[i]) - 50 + s
-            upper = int(crops[i + 1]) - 50 + s
-            right = int(crops[i]) + 50 + s
-            bottom = int(crops[i + 1]) + 50 + s
-            crop.append([left, upper, right, bottom])
+            try:
+                left_str = crops[i]
+                upper_str = crops[i + 1]
+                    
+                left = int(left_str) - 50 + s
+                upper = int(upper_str) - 50 + s
+                right = int(left_str) + 50 + s
+                bottom = int(upper_str) + 50 + s
+                crop.append([left, upper, right, bottom])
+            except Exception as ex:
+                print('length of crops is', len(crops), 'length video', frames.size(0))
+                print(crops)
+                print(f"failed to crop at i {i}")
+                raise ex
         crops = crop
 
         if self.augmentations:
@@ -129,10 +140,17 @@ class MultiDataset(Dataset):
             augmentations1 = transforms.Compose([])
 
         temporalVolume = torch.zeros(frames.size(0), 1, 112, 112)
+
+        last_valid_crop = None
         for i, frame in enumerate(frames):
+            try:
+                crop_i = crops[i]
+                last_valid_crop = crop_i
+            except:
+                crop_i = last_valid_crop
             transform = transforms.Compose([
                 transforms.ToPILImage(),
-                Crop(crops[i]),
+                Crop(crop_i),
                 transforms.Resize([112, 112]),
                 augmentations1,
                 transforms.Grayscale(num_output_channels=1),
@@ -252,9 +270,11 @@ class MultiDataset(Dataset):
             num_a_frames = melspec.size(2)
             melspec = nn.ConstantPad2d((0, window_size * 4 - melspec.size(2), 0, 0), 0.)(melspec)
             spec = nn.ConstantPad2d((0,  window_size * 4 - spec.size(2), 0, 0), 0.)(spec)
-
-        vid = self.build_tensor(vid, crops)
-
+        try:
+         vid = self.build_tensor(vid, crops)
+        except Exception as ex:
+            print(f"error happened constructing video at {file_path}")
+            raise ex
         audio_length = int(window_size / self.info['video_fps'] * self.info['audio_fps'])
         audio = audio[:, :audio_length]
 
@@ -268,8 +288,8 @@ class MultiDataset(Dataset):
         for line in lines:
             start, stop, word = line.split(" ")
             # print(word,start,stop)
-            if word.lower() == "sil":
-                continue
+            # if word.lower() == "sil":
+            #     continue
 
             start, stop = float(start), float(stop)
             words.append([word, start, stop])

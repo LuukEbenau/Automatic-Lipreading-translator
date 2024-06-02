@@ -148,7 +148,7 @@ def collate_data(data, batch):
     return data.collate_fn(batch)
 
 def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = None):
-	# hifigan, vocoder_train_setup, denoiser = load_hifigan()
+	hifigan = load_hifigan().cuda() #vocoder_train_setup, denoiser
 
 	best_val_stoi = 0
 	writer = SummaryWriter(comment=os.path.split(args.checkpoint_dir)[-1])
@@ -197,6 +197,10 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			mel, spec, vid, vid_len, wav_tr, mel_len, target, target_len, start_frame, window_size, f_name, sp_mel = batch
 			max_window_size = window_size.max()
 
+			# print("Testing inverse mel fucntionalirt")
+			# # inverse_test = hifigan(mel.detach()[0]) #inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
+			# print(f"Shape of the wav is {get_shape(inverse_test)}")
+
 			##### For masked prediction
 			#vid: B, C, T, H, W
 			mel_masks = []
@@ -224,9 +228,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			gen_mel = mel_layer(gen_v_feat, sp_feat)  # B,1,80,4S
 			gen_mel = gen_mel * mel_masks
-			# print("Testing inverse mel fucntionalirt")
-			# inverse_test = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
-			# print(f"Shape of the wav is {get_shape(inverse_test)}")
+
 			################################### GEN ########################################
 			if args.asr_checkpoint is not None and args.output_content_loss:
 				if args.asr_checkpoint_type == "LRS2" or args.asr_checkpoint_type == "LRS3":
@@ -236,7 +238,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 				elif args.asr_checkpoint_type == "WHISPER":
 					gen_ctc_loss = calculate_whisper_content_loss(mel.cuda(), gen_mel.cuda(), asr_model, train_data.char_list)
-					gen_ctc_loss *= 10
+					gen_ctc_loss *= 5
 				else:
 					gen_ctc_loss = torch.zeros(1).cuda()
 			else:
@@ -261,10 +263,12 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			################################### VISUALIZE & VALIDATE ########################################
 			if i % 100 == 0:
-				# wav_pred = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0]) 
-				wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
+				# wav_pred = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
+				wav_pred = hifigan(gen_mel.cuda().detach()[0])
+				wav_gt = hifigan(mel.cuda().detach()[0])
+				# wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
 				# wav_gt = inverse_mel(hifigan, vocoder_train_setup, denoiser, mel.detach()[0]) 
-				wav_gt = train_data.inverse_mel(mel.cuda().detach()[0], mel_len[0:1], stft)
+				# wav_gt = train_data.inverse_mel(mel.cuda().detach()[0], mel_len[0:1], stft)
 				
 			else:
 				wav_pred = 0

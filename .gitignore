@@ -190,3 +190,9 @@ liptospeech_extern/data/LRW/lrw-v1.tar
 liptospeech_extern/data/**
 liptospeech_extern/data/**/**
 liptospeech_extern/data/GRID/unseen_test.txt
+liptospeech_extern/data/GRID/unseen_val.txt
+liptospeech_extern/data/GRID/unseen_train.txt
+liptospeech_extern/data/GRID/unseen_test.txt
+liptospeech_extern/data/GRID/GRID_crop/preprocess_pretrain.txt
+liptospeech_extern/data/GRID/GRID_crop/preprocess_test.txt
+liptospeech_extern/data/GRID/GRID_crop/preprocess_trainval.txt
