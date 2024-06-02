@@ -187,3 +187,6 @@ liptospeech_extern/data/checkpoints/**
 liptospeech_extern/data/LRW/��S���o��z�6��k�����gmu���z�z���U�{�w]����w�ٕ������4
 liptospeech_extern/data/LRW/lrw-v1-partac
 liptospeech_extern/data/LRW/lrw-v1.tar
+liptospeech_extern/data/**
+liptospeech_extern/data/**/**
+liptospeech_extern/data/GRID/unseen_test.txt
