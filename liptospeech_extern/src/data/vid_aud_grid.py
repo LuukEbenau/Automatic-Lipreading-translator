@@ -294,8 +294,8 @@ class MultiDataset(Dataset):
             start, stop = float(start), float(stop)
             words.append([word, start, stop])
 
-        num_words = min(random.randint(4, 6), len(words))   #4 ~ 20
-        word_start = random.randint(0, len(words) - num_words)
+        num_words = len(words) # min(random.randint(4, 6), )   #4 ~ 20
+        word_start = 0 # random.randint(0, len(words) - num_words)
         word_end = word_start + num_words
 
         sample_start = 0
