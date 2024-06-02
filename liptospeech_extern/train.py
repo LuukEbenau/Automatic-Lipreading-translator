@@ -238,7 +238,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 				elif args.asr_checkpoint_type == "WHISPER":
 					gen_ctc_loss = calculate_whisper_content_loss(mel.cuda(), gen_mel.cuda(), asr_model, train_data.char_list)
-					gen_ctc_loss *= 5
+					gen_ctc_loss *= 1.5
 				else:
 					gen_ctc_loss = torch.zeros(1).cuda()
 			else:
