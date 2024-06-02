@@ -186,7 +186,8 @@ def tokenize_words(unique_words, model_prefix):
 	with open(f'{model_prefix}.temp.txt', 'w') as f:
 		f.write('\n'.join(unique_words))
 
-	spm.SentencePieceTrainer.train(input=f'{model_prefix}.temp.txt', model_prefix=model_prefix, vocab_size=54, user_defined_symbols=['sil'])
+	# , vocab_size=54
+	spm.SentencePieceTrainer.train(input=f'{model_prefix}.temp.txt', vocab_size=55, model_prefix=model_prefix, user_defined_symbols=['sil'])
 
 	sp = spm.SentencePieceProcessor()
 	sp.load(f'{model_prefix}.model')
@@ -204,7 +205,7 @@ def train_language_model_GRID(args):
 	words_set = set(words)
 	print(f"Number of unique words {len(words_set)}")
 
-	tokenize_words(words_set, output_dir+"grid_lower")
+	tokenize_words(words_set, output_dir+"grid_lower2")
 
 
 
