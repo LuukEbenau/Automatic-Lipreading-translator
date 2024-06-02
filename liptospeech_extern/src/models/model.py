@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from src.models.resnet import ResNetModel
+from src.models.textencoder import TextEncoder
 from src.conformer.encoder import ConformerEncoder
 from einops import rearrange
 
@@ -108,18 +109,29 @@ def get_shape(tensor):
     return f"({', '.join(shapes)})"
 
 class Mel_classifier(nn.Module):
+    '''
+    Args for textencoder:
+            x (torch.Tensor): batch of texts, converted to a tensor with phoneme embedding ids.
+                shape: (batch_size, max_text_length)
+            x_lengths (torch.Tensor): lengths of texts in batch.
+                shape: (batch_size,)
+    Outputs of textencoder: mu, logw, x_mask
+    '''
     def __init__(self):
         super().__init__()
 
         self.fusion = nn.Sequential(nn.Linear(1024, 512),
                                     nn.ReLU())
 
-        self.classifier = nn.Sequential(nn.Conv1d(512, 256, 7, 1, 3),
-                                        nn.ReLU(),
-                                        nn.Conv1d(256, 128, 7, 1, 3),
-                                        nn.ReLU(),
-                                        nn.Conv1d(128, 320, 7, 1, 3),
-                                        )
+        #self.classifier = nn.Sequential(nn.Conv1d(512, 256, 7, 1, 3),
+        #                                LayerNorm(256),
+        #                                nn.ReLU(),
+        #                                nn.Conv1d(256, 128, 7, 1, 3),
+        #                                LayerNorm(128),
+        #                                nn.ReLU(),
+        #                                nn.Conv1d(128, 320, 7, 1, 3),
+        #                                ) #AET-Note: Added BatchNorm1d and LayerNorm for test
+        self.classifier = TextEncoder(n_vocab=256) 
 
     def forward(self, x, sp):
         sp = sp.unsqueeze(1).repeat(1, x.size(1), 1)
@@ -129,12 +141,15 @@ class Mel_classifier(nn.Module):
         x = self.fusion(x)  #B, T, 512
         # print(get_shape(x))
         x = x.permute(0, 2, 1).contiguous()     #B, 512, T
-        # print(get_shape(x))
-        x = self.classifier(x)
-        # print(get_shape(x))
+        #print(get_shape(x))
+        #print(x[0].size(1))
+        #T = x[0].shape
+        #x = self.classifier(x)
+        x, _, _ = self.classifier(x, 512) 
+        #print(get_shape(x))
         # B, 320, S
         x = rearrange(x, 'b (d c f) t -> b d c (t f)', d=1, f=4)
-        # print(get_shape(x))
+        print(get_shape(x))
         return x
 
 class MatchaMel_classifier(nn.Module):
@@ -172,6 +187,29 @@ class MatchaMel_classifier(nn.Module):
         # ALSO return a mu
         return x
 
+
+class LayerNorm(nn.Module):
+    '''
+    Layer normalzation module from Macha-TTS
+    '''
+    def __init__(self, channels, eps=1e-4):
+        super().__init__()
+        self.channels = channels
+        self.eps = eps
+
+        self.gamma = torch.nn.Parameter(torch.ones(channels))
+        self.beta = torch.nn.Parameter(torch.zeros(channels))
+
+    def forward(self, x):
+        n_dims = len(x.shape)
+        mean = torch.mean(x, 1, keepdim=True)
+        variance = torch.mean((x - mean) ** 2, 1, keepdim=True)
+
+        x = (x - mean) * torch.rsqrt(variance + self.eps)
+
+        shape = [1, -1] + [1] * (n_dims - 2)
+        x = x * self.gamma.view(*shape) + self.beta.view(*shape)
+        return x
 
 
 ## https://github.com/shivammehta25/Matcha-TTS/blob/main/matcha/models/components/text_encoder.py#L328
