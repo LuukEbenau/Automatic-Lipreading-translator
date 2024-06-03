@@ -74,8 +74,13 @@ def preprocess_video(data_dir, data_ext, output_dir, outputfilename):
 		# Filter out files that have already been processed
 		files_to_process = [file for file in files if file not in existing_files]
 
+	if not files_to_process:
+		print("No new files to process.")
+		return
+
+	# Append to the existing file instead of overwriting it
 	with ProcessPoolExecutor() as executor:
-		with open(os.path.join(output_dir, train_name), 'a') as fs:
+		with open(output_path, 'a') as fs:
 			print("Preprocessing train and validation files")
 			futures = {executor.submit(process_file, file, data_dir): file for file in files_to_process}
 			for future in tqdm(as_completed(futures), total=len(files_to_process)):
@@ -85,7 +90,6 @@ def preprocess_video(data_dir, data_ext, output_dir, outputfilename):
 					fs.write(line + '\n')
 				except Exception as exc:
 					print(f"{file} generated an exception: {exc}")
-
 
 
 
