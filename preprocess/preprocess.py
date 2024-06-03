@@ -65,7 +65,7 @@ def preprocess_video(data_dir, data_ext, output_dir, outputfilename):
     train_name = outputfilename #"preprocess_trainval.txt"
     # test_name = "preprocess_test.txt"
 
-    with ProcessPoolExecutor(max_workers=7) as executor:
+    with ProcessPoolExecutor() as executor:
         with open(os.path.join(output_dir, train_name), 'w') as fs:
             print("Preprocessing train and validation files")
             futures = {executor.submit(process_file, file, data_dir): file for file in trainval_files}
