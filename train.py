@@ -291,7 +291,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					writer.add_audio('train_aud/gt_wav', wav_tr[0].numpy(), global_step=step, sample_rate=args.samplerate)
 
 			if step % args.eval_step == 0:
-				logs = validate(v_front, mel_layer, sp_layer, args, epoch=epoch, writer=writer, fast_validate=True)
+				logs = validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, epoch=epoch, writer=writer, fast_validate=True)
 
 				print('VAL_stoi: ', logs[1])
 				print('Saving checkpoint: %d' % epoch)
@@ -331,11 +331,12 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 	print('Finishing training')
 
-def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, writer=None):
+def validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, fast_validate=True, epoch=0, writer=None):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()
 		sp_layer.eval()
+		ctc_layer.eval()
 
 		val_data = get_dataset(args, val=True)
 
@@ -364,13 +365,14 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 		stoi_list = []
 		estoi_list = []
 		pesq_list = []
-		# wer_list = []
+		
 		required_iter = (samples // batch_size)
 
 		description = 'Validation on subset of the Val dataset' if fast_validate else 'Validation'
 		print(description)
 
-		# beam_text, truth_txt = [], []
+		beam_texts, truth_txts = [], []
+		beam_wers = []
 
 		for i, batch in enumerate(dataloader):
 			if i % 10 == 0:
@@ -380,6 +382,8 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 
 			sp_feat = sp_layer(mel[:, :, :, :50].cuda())
 			v_feat = v_front(vid.cuda(), vid_len.cuda())  # S,B,512
+
+			ctc_pred = ctc_layer(v_feat) # added this
 
 			g_mel = mel_layer(v_feat, sp_feat)
 
@@ -404,6 +408,16 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 					pesq_list.append(pesq_score)
 				except:
 					pass
+
+			########## DECODE ##########
+			# Geting predictions
+			softmax_result = F.softmax(ctc_pred, 2).cpu()
+			beam_text, truth_txt = decode_with_decoder(decoder, softmax_result, val_data, vid, targets, val_data.char_list[0])
+
+			if len(truth_txt) > 0:
+				beam_texts.extend(beam_text)
+				truth_txts.extend(truth_txt)
+				beam_wers.extend(wer(beam_text, truth_txt))
 
 			if i in [int(required_iter // 3), int(2 * (required_iter // 3)), int(3 * (required_iter // 3))]:
 				if writer is not None:
@@ -437,20 +451,22 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 			if i >= max_batches:
 				break
 
+
+		for (predict, truth) in list(zip(beam_texts, truth_txts))[:5]:
+			print(f'VP: {predict.upper()}')
+			print(f'GT: {truth.upper()}\n') # Ground truth
+
 		if writer is not None:
 			writer.add_scalar('val/recon_loss', np.mean(np.array(val_loss)), epoch)
 			writer.add_scalar('val/mel_stoi', np.mean(np.array(stoi_list)), epoch)
 			writer.add_scalar('val/mel_estoi', np.mean(np.array(estoi_list)), epoch)
 			writer.add_scalar('val/mel_pesq', np.mean(np.array(pesq_list)), epoch)
-
-		# for (predict, truth) in list(zip(beam_text, truth_txt))[:3]:
-		# 	print(f'VP: {predict.upper()}')
-		# 	print(f'GT: {truth.upper()}\n') # Ground truth
-
+			writer.add_scalar('val/wer', np.mean(np.array(beam_wers)))
 
 		v_front.train()
 		sp_layer.train()
 		mel_layer.train()
+		ctc_layer.train()
 
 		print('val_stoi:', np.mean(np.array(stoi_list)))
 		print('val_estoi:', np.mean(np.array(estoi_list)))

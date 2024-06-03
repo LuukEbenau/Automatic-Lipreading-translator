@@ -211,16 +211,16 @@ class MultiDataset(Dataset):
             vid = torch.zeros([1, 112, 112, 3])
             audio = torch.zeros([1, int(3 * self.samplerate / 25)])
 
-        # if 'pretrain' in file_path:
-        #     st_v_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['video_fps'] * 1000)
-        #     end_v_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['video_fps'] * 1000)
-        #     st_a_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['audio_fps'])
-        #     end_a_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['audio_fps'])
+        if 'pretrain' in file_path:
+            st_v_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['video_fps'] * 1000)
+            end_v_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['video_fps'] * 1000)
+            st_a_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['audio_fps'])
+            end_a_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['audio_fps'])
 
-        #     vid = vid[st_v_frame:end_v_frame]
-        #     audio = audio[:, st_a_frame:end_a_frame]
-        # else:
-        st_v_frame = 0
+            vid = vid[st_v_frame:end_v_frame]
+            audio = audio[:, st_a_frame:end_a_frame]
+        else:
+            st_v_frame = 0
 
         # print('audio later', audio)
         ## Video ##
