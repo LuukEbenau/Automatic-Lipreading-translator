@@ -6,6 +6,15 @@ import glob
 
 from preprocess import preprocess_video, extract_audio, process_unseen_file, move_files, move_video_missing_aligns_to_test,split_val_from_train_using_crops
 
+
+'''
+Create unseen file using:
+python preprocess.py --action CREATE_UNSEEN_FILE --input_dir data/GRID_audio/pretrain/ --output_dir data/GRID/ --outputfilename unseen_train.txt
+
+Create crops using:
+python preprocess.py --action CREATE_MOUTH_CROPS --input_dir data/GRID/pretrain/ --output_dir data/GRID/GRID_crop/ --outputfilename preprocess_pretrain.txt
+'''
+
 def parse_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--action", type=str, required=True, help="EXTRACT_AUDIO, TRAIN_LM, CREATE_UNSEEN_FILE, MOVE_FILES, CREATE_MOUTH_CROPS, MOVE_MISSING_ALIGNS, SPLIT_VAL_FROM_TRAIN")

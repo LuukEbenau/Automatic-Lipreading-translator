@@ -58,25 +58,33 @@ def process_file(file, data_dir):
 	return extract_lip_embeddings(data_dir, file)
 
 def preprocess_video(data_dir, data_ext, output_dir, outputfilename):
-    files = glob.glob(f'{data_dir}/*.{data_ext}', recursive=True)
-    files = [os.path.relpath(file, data_dir) for file in files]
+	existing_files = set()
+	output_path = os.path.join(output_dir, outputfilename)
+	
+	if os.path.exists(output_path):
+		with open(output_path, 'r') as f:
+			for line in f:
+				if '/' in line:
+					filename = line.split('/')[0]
+					existing_files.add(filename)
 
-    trainval_files = files# test_files = train_test_split(files, test_size=0.025)
+		files = glob.glob(f'{data_dir}/*.{data_ext}', recursive=True)
+		files = [os.path.relpath(file, data_dir) for file in files]
 
-    train_name = outputfilename #"preprocess_trainval.txt"
-    # test_name = "preprocess_test.txt"
+		# Filter out files that have already been processed
+		files_to_process = [file for file in files if file not in existing_files]
 
-    with ProcessPoolExecutor() as executor:
-        with open(os.path.join(output_dir, train_name), 'w') as fs:
-            print("Preprocessing train and validation files")
-            futures = {executor.submit(process_file, file, data_dir): file for file in trainval_files}
-            for future in tqdm(as_completed(futures), total=len(trainval_files)):
-                file = futures[future]
-                try:
-                    line = future.result()
-                    fs.write(line + '\n')
-                except Exception as exc:
-                    print(f"{file} generated an exception: {exc}")
+	with ProcessPoolExecutor() as executor:
+		with open(os.path.join(output_dir, train_name), 'a') as fs:
+			print("Preprocessing train and validation files")
+			futures = {executor.submit(process_file, file, data_dir): file for file in files_to_process}
+			for future in tqdm(as_completed(futures), total=len(files_to_process)):
+				file = futures[future]
+				try:
+					line = future.result()
+					fs.write(line + '\n')
+				except Exception as exc:
+					print(f"{file} generated an exception: {exc}")
 
 
 

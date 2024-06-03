@@ -159,22 +159,19 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-
-datasets/**/**
-datasets/**
-outputs/**
 data/LRS2/**
 data/LRS3/**
-datasets.zip
+
 data/GRID/pretrain/**
+data/GRID/test/**
+data/GRID/trainval/**
 data/GRID_audio/pretrain/**
 data/GRID_audio/trainval/**
-data/GRID_audio/main/**
-data/GRID_audio/s1/**
-data/GRID_audio/s10/**
+data/GRID_audio/test/**
+
 runs/**
-data/GRID/main/**
-data/GRID/trainval/**
+liptospeech_extern/runs/**
+
 checkpoints/**
 pretrained/**
 old_runs/**
@@ -198,4 +195,4 @@ data/GRID/GRID_crop/misc/preprocess_val_s10.txt
 data/GRID/GRID_crop/misc/preprocess_trainval_s1.txt
 data/GRID/GRID_crop/misc/preprocess_test_s1.txt
 checkpoints/Epoch_0039_stoi_0.394_estoi_0.003_pesq_nan.ckpt
-liptospeech_extern/runs/**
+
