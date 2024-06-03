@@ -5,8 +5,6 @@ import shutil
 import glob
 
 def process_unseen_file(args):
-	assert args.input_dir is not None, "Please supply a --input_dir, to something like /liptospeech_extern/data/GRID/"
-	assert args.output_dir is not None, "Please supply a --output_dir, to something like /liptospeech_extern/data/GRID/"
 	input_dir = args.input_dir
 	output_dir = args.output_dir
 
@@ -17,4 +15,4 @@ def process_unseen_file(args):
 		for file_path in glob.glob(os.path.join(input_dir, f'*.{video_ext}')):
 			filename = os.path.basename(file_path)
 			file_prefix = os.path.splitext(filename)[0]
-			f.write(f"trainval/{file_prefix}\n")
+			f.write(f"{args.dataset_type}/{file_prefix}\n")

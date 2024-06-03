@@ -23,6 +23,7 @@ def parse_args():
 	parser.add_argument("--output_dir", default="./outputs/", type=str,help= "output")
 	parser.add_argument("--video_ext", type=str, default="mpg")
 	parser.add_argument("--audio_ext", type=str, default="wav")
+	parser.add_argument("--dataset_type", type=str)
 	parser.add_argument("--inputfile", type=str)
 	parser.add_argument("--samplerate", type=int, default=16000)
 
@@ -45,6 +46,9 @@ if __name__ == "__main__":
 		assert args.output_dir is not None, 'Please supply output_dir, e.g. /mnt/d/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/data/GRID_audio/pretrain/'
 		extract_audio(args.input_dir, args.output_dir, args.video_ext, args.audio_ext, args.samplerate)
 	elif args.action == "CREATE_UNSEEN_FILE":
+		assert args.dataset_type != None, "Please supply a --dataset_type to pretrain, test or trainval"
+		assert args.input_dir is not None, "Please supply a --input_dir, to something like /liptospeech_extern/data/GRID/"
+		assert args.output_dir is not None, "Please supply a --output_dir, to something like /liptospeech_extern/data/GRID/"
 		process_unseen_file(args)
 	elif args.action == "MOVE_FILES":
 		move_files(args)
