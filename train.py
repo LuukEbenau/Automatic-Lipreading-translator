@@ -133,6 +133,8 @@ def train_net(args):
 
 	optimizer = optim.AdamW(params, lr=args.lr, weight_decay=args.weight_decay, amsgrad=True)
 
+	scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+
 	if args.dataparallel:
 		v_front = DP(v_front)
 		mel_layer = DP(mel_layer)
@@ -142,12 +144,12 @@ def train_net(args):
 			asr_model = DP(asr_model)
 
 	# _ = validate(v_front, mel_layer, post, sp_layer, fast_validate=True)
-	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, args=args, samplerate = args.samplerate)
+	train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, args.epochs, optimizer=optimizer, scheduler=scheduler, args=args, samplerate = args.samplerate)
 
 def collate_data(data, batch):
     return data.collate_fn(batch)
 
-def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer, args, samplerate = None):
+def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs, optimizer,scheduler, args, samplerate = None):
 	hifigan = load_hifigan().cuda() #vocoder_train_setup, denoiser
 
 	best_val_stoi = 0
@@ -328,6 +330,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 		if np.mean(recon_loss_list) < args.output_content_on and epoch > 4:
 			args.output_content_loss = True
+			
+		scheduler.step()
 
 	print('Finishing training')
 

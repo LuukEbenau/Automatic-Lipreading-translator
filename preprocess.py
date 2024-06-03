@@ -4,7 +4,7 @@ import os
 import shutil
 import glob
 
-from preprocess import preprocess_video, extract_audio, process_unseen_file, move_files, move_video_missing_aligns_to_test,split_val_from_train_using_crops
+from preprocess import preprocess_video, extract_audio, process_unseen_file, move_files, move_video_missing_aligns_to_test,split_val_from_train_using_crops, train_language_model_GRID
 
 
 '''
@@ -36,56 +36,7 @@ def crop_mouth(args):
 
 	preprocess_video(args.input_dir, args.video_ext, output_path, args.outputfilename)
 
-def extract_words_from_file(file_path):
-	words = []
-	with open(file_path, 'r') as file:
-		for line in file:
-			parts = line.split()
-			if len(parts) == 3:
-				word = parts[2]
-				# if word != "sil":
-				words.append(word)
 
-	return words
-
-def extract_words_from_folder(folder_path):
-	import glob
-	all_words = []
-	for file_path in glob.glob(os.path.join(folder_path, '**', '*.align'), recursive=True):
-		words = extract_words_from_file(file_path)
-		all_words.extend(words)
-	return all_words
-
-def write_words_to_file(words, output_file_path):
-	with open(output_file_path, 'w') as file:
-		for word in words:
-			file.write(word + '\n')
-
-def tokenize_words(unique_words, model_prefix):
-	import sentencepiece as spm
-	with open(f'{model_prefix}.temp.txt', 'w') as f:
-		f.write('\n'.join(unique_words))
-
-	# , vocab_size=54
-	spm.SentencePieceTrainer.train(input=f'{model_prefix}.temp.txt', vocab_size=55, model_prefix=model_prefix, user_defined_symbols=['sil'])
-
-	sp = spm.SentencePieceProcessor()
-	sp.load(f'{model_prefix}.model')
-
-	tokenized_words = [sp.encode_as_pieces(word) for word in unique_words]
-
-	return tokenized_words
-
-def train_language_model_GRID(args):
-	output_dir = args.output_dir if args.output_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
-	input_dir = args.input_dir if args.input_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/alignments/alignments/"
-
-	words = extract_words_from_folder(input_dir)
-	print(f"Number of words: {len(words)}")
-	words_set = set(words)
-	print(f"Number of unique words {len(words_set)}")
-
-	tokenize_words(words_set, output_dir+"grid_lower2")
 
 if __name__ == "__main__":
 	args = parse_args()
