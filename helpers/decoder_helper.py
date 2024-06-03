@@ -59,7 +59,7 @@ def load_decoder(char_list):
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
 
-def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, blank_id):
+def decode_with_decoder(decoder, softmax_result, train_data, vid, target, blank_id):
 	decodertype = get_decoder_type()
 
 	if decodertype == "ctcdecode":
@@ -92,9 +92,8 @@ def decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, targ
 	else:
 		raise Exception(f"Decoder {decodertype} does not exist")
 	truth_txt = [train_data.arr2txt(target[_]) for _ in range(vid.size(0))]
-	from .eval_helper import wer
-	beam_wer.extend(wer(beam_text, truth_txt))
-	return beam_text, truth_txt, beam_wer
+
+	return beam_text, truth_txt
 
 def check_package_installed(package_name):
 	# Check using pkg_resources

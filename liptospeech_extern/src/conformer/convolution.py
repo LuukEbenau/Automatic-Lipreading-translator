@@ -18,7 +18,7 @@ from torch import Tensor
 from typing import Tuple
 
 import sys
-sys.path.append('./src')
+sys.path.append('./liptospeech_extern/src')
 
 from conformer.activation import Swish, GLU
 from conformer.modules import Transpose

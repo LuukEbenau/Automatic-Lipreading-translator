@@ -4,16 +4,20 @@ import torch
 from torch import nn, optim
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
-from src.models.asr_model import ASR_model
+
+import sys
+sys.path.append('./liptospeech_extern/src')
+
+from models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
+from models.asr_model import ASR_model
 
 import editdistance
 import os
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
-from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
-from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
+from data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
+from data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
+from data.vid_aud_grid import MultiDataset as GRID_Dataset
 from torch.nn import DataParallel as DP
 import torch.nn.parallel
 import time

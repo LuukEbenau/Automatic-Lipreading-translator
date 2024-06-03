@@ -30,7 +30,11 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from scipy.signal import get_window
 from librosa.util import pad_center, tiny
-from src.data.audio_processing import window_sumsquare
+
+import sys
+sys.path.append('./liptospeech_extern/src')
+
+from data.audio_processing import window_sumsquare
 
 class STFT(torch.nn.Module):
     """adapted from Prem Seetharaman's https://github.com/pseeth/pytorch-stft"""

@@ -22,10 +22,10 @@ from pystoi import stoi
 from matplotlib import pyplot as plt
 import tqdm
 
-from src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
-from src.models.asr_model import ASR_model
+from liptospeech_extern.src.models.model import Visual_front, Conformer_encoder, CTC_classifier, Speaker_embed, Mel_classifier
+from liptospeech_extern.src.models.asr_model import ASR_model
 #NOTE: These are functions i wrote myself, as convenience and to not clutter the train.py file
-from src.helpers import decode_with_decoder, get_dataset, get_shape, load_decoder, wer, calculate_whisper_content_loss, get_asr_model, log_time, load_hifigan, inverse_mel
+from helpers import decode_with_decoder, get_dataset, get_shape, load_decoder, wer, calculate_whisper_content_loss, get_asr_model, log_time, load_hifigan, inverse_mel
 
 # TODO LIST:
 # 1. Create vocabolary from dataset
@@ -197,10 +197,6 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			mel, spec, vid, vid_len, wav_tr, mel_len, target, target_len, start_frame, window_size, f_name, sp_mel = batch
 			max_window_size = window_size.max()
 
-			# print("Testing inverse mel fucntionalirt")
-			# # inverse_test = hifigan(mel.detach()[0]) #inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
-			# print(f"Shape of the wav is {get_shape(inverse_test)}")
-
 			##### For masked prediction
 			#vid: B, C, T, H, W
 			mel_masks = []
@@ -230,6 +226,9 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 			gen_mel = gen_mel * mel_masks
 
 			################################### GEN ########################################
+			mel_denormalized = train_data.denormalize(mel.cuda())
+			gen_mel_denormalized = train_data.denormalize(gen_mel.cuda())
+
 			if args.asr_checkpoint is not None and args.output_content_loss:
 				if args.asr_checkpoint_type == "LRS2" or args.asr_checkpoint_type == "LRS3":
 					_, gen_ctc_feat = asr_model(gen_mel.cuda(), gen_v_len)
@@ -237,14 +236,14 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					gen_ctc_loss = F.mse_loss(gen_ctc_feat, real_ctc_feat)
 
 				elif args.asr_checkpoint_type == "WHISPER":
-					gen_ctc_loss = calculate_whisper_content_loss(mel.cuda(), gen_mel.cuda(), asr_model, train_data.char_list)
+					gen_ctc_loss = calculate_whisper_content_loss(mel_denormalized, gen_mel_denormalized, asr_model, train_data.char_list)
 					gen_ctc_loss *= 1.5
 				else:
 					gen_ctc_loss = torch.zeros(1).cuda()
 			else:
 				gen_ctc_loss = torch.zeros(1).cuda()
 
-			recon_loss = criterion(train_data.denormalize(gen_mel), train_data.denormalize(mel.cuda()))
+			recon_loss = criterion(gen_mel_denormalized, mel_denormalized)
 			recon_loss *= 100.0
 			ctc_loss = CTC_criterion(ctc_pred.transpose(0, 1).log_softmax(2), target.cuda(), vid_len, target_len) / vid.size(0)
 
@@ -259,16 +258,15 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			################################### DECODE ########################################
 			softmax_result = F.softmax(ctc_pred, 2).cpu()
-			beam_text, truth_txt, beam_wer = decode_with_decoder(decoder, softmax_result, beam_wer, train_data, vid, target, train_data.char_list[0])
+			beam_text, truth_txt = decode_with_decoder(decoder, softmax_result, train_data, vid, target, train_data.char_list[0])
+
+			if len(truth_txt) > 0:
+				beam_wer.extend(wer(beam_text, truth_txt))
 
 			################################### VISUALIZE & VALIDATE ########################################
 			if i % 100 == 0:
-				# wav_pred = inverse_mel(hifigan, vocoder_train_setup, denoiser, gen_mel.detach()[0])
 				wav_pred = hifigan(gen_mel.cuda().detach()[0])
 				wav_gt = hifigan(mel.cuda().detach()[0])
-				# wav_pred = train_data.inverse_mel(gen_mel.detach()[0], mel_len[0:1], stft)  # 1, 80, T
-				# wav_gt = inverse_mel(hifigan, vocoder_train_setup, denoiser, mel.detach()[0]) 
-				# wav_gt = train_data.inverse_mel(mel.cuda().detach()[0], mel_len[0:1], stft)
 				
 			else:
 				wav_pred = 0
@@ -281,10 +279,11 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 				writer.add_scalar('train/g_ctc_loss', gen_ctc_loss.cpu(), step)
 				if i % 100 == 0:
 					print(f'######## Step(Epoch): {step}({epoch}), Recon Loss: {recon_loss.cpu().item()}, Ctc loss: {ctc_loss.cpu()}, ASR loss {gen_ctc_loss.cpu()} #########')
-					for (predict, truth) in list(zip(beam_text, truth_txt))[:3]:
-						print(f'VP: {predict.upper()}')
-						print(f'GT: {truth.upper()}\n') # Ground truth
-					writer.add_scalar('train/wer', np.array(beam_wer).mean(), step)
+
+					if len(beam_wer)>0:
+						writer.add_scalar('train/wer', np.array(beam_wer).mean(), step)
+					else:
+						print(f"No word error rates in batch, ignoring WER")
 					writer.add_image('train_mel/gen', train_data.plot_spectrogram_to_numpy(gen_mel.cpu().detach().numpy()[0]), step)
 					writer.add_image('train_mel/gt', train_data.plot_spectrogram_to_numpy(mel.detach().numpy()[0]), step)
 					writer.add_audio('train_aud/pred_mel', wav_pred[0], global_step=step, sample_rate=args.samplerate)
@@ -365,11 +364,14 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 		stoi_list = []
 		estoi_list = []
 		pesq_list = []
-
+		# wer_list = []
 		required_iter = (samples // batch_size)
 
 		description = 'Validation on subset of the Val dataset' if fast_validate else 'Validation'
 		print(description)
+
+		# beam_text, truth_txt = [], []
+
 		for i, batch in enumerate(dataloader):
 			if i % 10 == 0:
 				if not fast_validate:
@@ -440,6 +442,11 @@ def validate(v_front, mel_layer, sp_layer,args, fast_validate=True, epoch=0, wri
 			writer.add_scalar('val/mel_stoi', np.mean(np.array(stoi_list)), epoch)
 			writer.add_scalar('val/mel_estoi', np.mean(np.array(estoi_list)), epoch)
 			writer.add_scalar('val/mel_pesq', np.mean(np.array(pesq_list)), epoch)
+
+		# for (predict, truth) in list(zip(beam_text, truth_txt))[:3]:
+		# 	print(f'VP: {predict.upper()}')
+		# 	print(f'GT: {truth.upper()}\n') # Ground truth
+
 
 		v_front.train()
 		sp_layer.train()

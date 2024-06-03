@@ -7,7 +7,11 @@ import torch.nn.functional as F
 import torchaudio
 from torchvision import transforms
 from torch.utils.data import DataLoader, Dataset
-from src.data.transforms import Crop, StatefulRandomHorizontalFlip
+
+import sys
+sys.path.append('./liptospeech_extern/src')
+
+from data.transforms import Crop, StatefulRandomHorizontalFlip
 from PIL import Image
 import librosa
 from matplotlib import pyplot as plt
@@ -17,8 +21,8 @@ import torchvision
 import cv2
 from torch.autograd import Variable
 from librosa.filters import mel as librosa_mel_fn
-from src.data.audio_processing import dynamic_range_compression, dynamic_range_decompression, griffin_lim
-from src.data.stft import STFT
+from data.audio_processing import dynamic_range_compression, dynamic_range_decompression, griffin_lim
+from data.stft import STFT
 import sentencepiece as spm
 import math
 log1e5 = math.log(1e-5)
@@ -177,16 +181,12 @@ class MultiDataset(Dataset):
         start_sec = 0
         stop_sec = None
 
-        content = open(file_path + f".{self.align_ext}", "r").read()
-        # print("align content:",content)
         crops = self.crops[file].split("/")
         if 'pretrain' in file_path:
+            content = open(file_path + f".{self.align_ext}", "r").read()
             content, start_sec, stop_sec = self.get_pretrain_words(content)
         else:
             content = ""
-            for line in content.splitlines():
-                content += line.split(" ")[2] + " "
-            content = content.strip()
 
         cap = cv2.VideoCapture(file_path + f'.{self.video_ext}')
         frames = []
@@ -197,12 +197,12 @@ class MultiDataset(Dataset):
             else:
                 break
         cap.release()
-        # print("file path is",file_path)
+
         audio, _ = librosa.load(file_path.replace('GRID', 'GRID_audio') + '.wav', sr=self.samplerate)
         vid = torch.tensor(np.stack(frames, 0))
-        # print("audio is", audio)
+
         audio = torch.tensor(audio).unsqueeze(0)
-        # print('audio unsqueezed',audio)
+
         if not 'video_fps' in self.info:
             self.info['video_fps'] = 25
             self.info['audio_fps'] = self.samplerate
@@ -212,10 +212,10 @@ class MultiDataset(Dataset):
             audio = torch.zeros([1, int(3 * self.samplerate / 25)])
 
         # if 'pretrain' in file_path:
-        #     st_v_frame = math.floor(start_sec * self.info['video_fps'])
-        #     end_v_frame = math.ceil(stop_sec * self.info['video_fps'])
-        #     st_a_frame = math.floor(start_sec * self.info['audio_fps'])
-        #     end_a_frame = math.ceil(stop_sec * self.info['audio_fps'])
+        #     st_v_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['video_fps'] * 1000)
+        #     end_v_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['video_fps'] * 1000)
+        #     st_a_frame = math.floor(0 if start_sec == 0 else start_sec / self.info['audio_fps'])
+        #     end_a_frame = math.ceil(0 if stop_sec == 0 else stop_sec / self.info['audio_fps'])
 
         #     vid = vid[st_v_frame:end_v_frame]
         #     audio = audio[:, st_a_frame:end_a_frame]
@@ -258,6 +258,7 @@ class MultiDataset(Dataset):
         spec = self.normalize_spec(spec)    # 0 ~ 1
         spec = self.stft.spectral_normalize(spec)   # log(1e-5) ~ 0 # in log scale
         spec = self.normalize(spec)   # -1 ~ 1
+        
 
         index = random.randint(0, max(0, melspec.size(2) - 50))
         sp_mel = melspec[:, :, index:index + 50]
@@ -278,7 +279,11 @@ class MultiDataset(Dataset):
         audio_length = int(window_size / self.info['video_fps'] * self.info['audio_fps'])
         audio = audio[:, :audio_length]
 
+        # if len(content) >0:
         target, target_len = self.encode(content)
+        # else:
+        #     target=""
+        #     target_len = 0
 
         return melspec, spec, vid, num_v_frames, audio.squeeze(0), num_a_frames, audio_length, target, target_len, start_frame, window_size, file_path.replace(self.data, '')[1:], sp_mel
 
@@ -370,6 +375,7 @@ class MultiDataset(Dataset):
 
         for i, (melspec, spec, vid, num_v_frames, audio, spec_len, audio_length, target, target_len, start_frame, window_size, f_name, sp_mel) in enumerate(batch):
             padded_vid[i, :, :num_v_frames, :, :] = vid   # B, C, T, H, W
+            
             padded_targets.append(target + [0] * (max_target_length - target_len))
             padded_melspec.append(nn.ConstantPad2d((0, max_spec_length - melspec.size(2), 0, 0), 0.0)(melspec))
             padded_spec.append(nn.ConstantPad2d((0, max_spec_length - spec.size(2), 0, 0), 0.0)(spec))

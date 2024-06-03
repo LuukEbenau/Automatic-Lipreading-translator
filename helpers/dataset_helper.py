@@ -1,6 +1,6 @@
-from src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
-from src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
-from src.data.vid_aud_grid import MultiDataset as GRID_Dataset
+from liptospeech_extern.src.data.vid_aud_lrs2 import MultiDataset as LRS2_Dataset
+from liptospeech_extern.src.data.vid_aud_lrs3 import MultiDataset as LRS3_Dataset
+from liptospeech_extern.src.data.vid_aud_grid import MultiDataset as GRID_Dataset
 
 def get_dataset(args, val = False):
 	if args.data_name == 'GRID':

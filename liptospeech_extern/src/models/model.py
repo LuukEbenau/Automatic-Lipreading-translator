@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-from src.models.resnet import ResNetModel
-from src.conformer.encoder import ConformerEncoder
+from liptospeech_extern.src.models.resnet import ResNetModel
+from liptospeech_extern.src.conformer.encoder import ConformerEncoder
 from einops import rearrange
 
 class Visual_front(nn.Module):

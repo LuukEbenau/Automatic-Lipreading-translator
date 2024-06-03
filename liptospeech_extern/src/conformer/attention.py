@@ -20,7 +20,7 @@ from torch import Tensor
 from typing import Optional
 
 import sys
-sys.path.append('./src')
+sys.path.append('./liptospeech_extern/src')
 
 from conformer.embedding import PositionalEncoding
 from conformer.modules import Linear

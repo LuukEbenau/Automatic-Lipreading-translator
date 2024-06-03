@@ -7,7 +7,11 @@ import torch.nn.functional as F
 import torchaudio
 from torchvision import transforms
 from torch.utils.data import DataLoader, Dataset
-from src.data.transforms import Crop, StatefulRandomHorizontalFlip
+
+import sys
+sys.path.append('./liptospeech_extern/src')
+
+from data.transforms import Crop, StatefulRandomHorizontalFlip
 from PIL import Image
 import librosa
 from matplotlib import pyplot as plt
@@ -17,8 +21,8 @@ import torchvision
 import cv2
 from torch.autograd import Variable
 from librosa.filters import mel as librosa_mel_fn
-from src.data.audio_processing import dynamic_range_compression, dynamic_range_decompression, griffin_lim
-from src.data.stft import STFT
+from data.audio_processing import dynamic_range_compression, dynamic_range_decompression, griffin_lim
+from data.stft import STFT
 import sentencepiece as spm
 import math
 log1e5 = math.log(1e-5)

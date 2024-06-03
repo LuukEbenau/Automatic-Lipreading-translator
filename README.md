@@ -4,6 +4,11 @@ This page serves as an landing page of the project, describing the project globa
 For each sub-feature of our program
 
 
+# run the code using
+```
+python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.00001 --epochs 200 --batch_size 2 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/checkpoints/ --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 400 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/pretrained/LRS2_front_PT.ckpt 
+```
+
 
 ## Documentation & Communication
 We have not discussed it yet in detail, but what we did discuss is to make primarily use of github for the means of documentation and communication. We will use this Readme.MD for general information, the Getting Started, Etc. For anything more detailed, we can use the github Wiki. Just click on [wiki](https://github.com/LuukEbenau/Automatic-Lipreading-translator/wiki) in the header, and you can add pages for each of the subjects. We can for example make a page for each of the modules in the code, 1 page about architecture, etc. By putting it all in the github we make sure that everyone has access to the right information, and additionally it will safe us a lot of work for the final report.

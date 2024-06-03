@@ -18,8 +18,7 @@ from torch import Tensor
 from typing import Tuple
 
 import sys
-sys.path.append('./src')
-
+sys.path.append('./liptospeech_extern/src')
 from conformer.feed_forward import FeedForwardModule
 from conformer.attention import MultiHeadedSelfAttentionModule
 from conformer.convolution import (

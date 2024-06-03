@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import sys
-sys.path.append('./src')
+sys.path.append('./liptospeech_extern/src')
 
 from conformer.activation import Swish
 from conformer.modules import Linear

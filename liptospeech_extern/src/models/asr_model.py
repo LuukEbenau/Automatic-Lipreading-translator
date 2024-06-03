@@ -1,7 +1,11 @@
 import torch
 from torch import nn
-from src.models.resnet import ResNetModel
-from src.conformer.encoder import ConformerEncoder
+
+import sys
+sys.path.append('./liptospeech_extern/src')
+
+from models.resnet import ResNetModel
+from conformer.encoder import ConformerEncoder
 from einops import rearrange
 
 class ASR_model(nn.Module):
