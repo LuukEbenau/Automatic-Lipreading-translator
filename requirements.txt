@@ -1,0 +1,17 @@
+ffmpeg
+ctcdecode
+einops
+torch
+torchaudio
+torchvision
+tensorboard
+matplotlib
+numpy
+opencv-python
+editdistance
+sentencepiece
+tqdm
+transformers
+flashlight
+kenlm
+flashlight-text

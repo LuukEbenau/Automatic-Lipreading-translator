@@ -115,8 +115,10 @@ class Mel_classifier(nn.Module):
                                     nn.ReLU())
 
         self.classifier = nn.Sequential(nn.Conv1d(512, 256, 7, 1, 3),
+                                        LayerNorm(256),
                                         nn.ReLU(),
                                         nn.Conv1d(256, 128, 7, 1, 3),
+                                        LayerNorm(128),
                                         nn.ReLU(),
                                         nn.Conv1d(128, 320, 7, 1, 3),
                                         )
@@ -172,6 +174,30 @@ class MatchaMel_classifier(nn.Module):
         # ALSO return a mu
         return x
 
+
+# TODO: Clean away into a separate module in a neat way, or remove when we have CFM layer created
+class LayerNorm(nn.Module):
+    '''
+    Layer normalzation module from Macha-TTS
+    '''
+    def __init__(self, channels, eps=1e-4):
+        super().__init__()
+        self.channels = channels
+        self.eps = eps
+
+        self.gamma = torch.nn.Parameter(torch.ones(channels))
+        self.beta = torch.nn.Parameter(torch.zeros(channels))
+
+    def forward(self, x):
+        n_dims = len(x.shape)
+        mean = torch.mean(x, 1, keepdim=True)
+        variance = torch.mean((x - mean) ** 2, 1, keepdim=True)
+
+        x = (x - mean) * torch.rsqrt(variance + self.eps)
+
+        shape = [1, -1] + [1] * (n_dims - 2)
+        x = x * self.gamma.view(*shape) + self.beta.view(*shape)
+        return x
 
 
 ## https://github.com/shivammehta25/Matcha-TTS/blob/main/matcha/models/components/text_encoder.py#L328
