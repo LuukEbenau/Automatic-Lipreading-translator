@@ -1,16 +1,13 @@
 import glob
 import sentencepiece as spm
 
-def train_language_model_GRID(args):
-	output_dir = args.output_dir if args.output_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/liptospeech_extern/data/GRID/"
-	input_dir = args.input_dir if args.input_dir != None else "D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/datasets/alignments/alignments/"
-
+def train_language_model_GRID(input_dir, output_dir, outputfilename):
 	words = extract_words_from_folder(input_dir)
 	print(f"Number of words: {len(words)}")
 	words_set = set(words)
 	print(f"Number of unique words {len(words_set)}")
 
-	tokenize_words(words_set, output_dir+"grid_lower2")
+	tokenize_words(words_set, output_dir+outputfilename)
 
 def extract_words_from_file(file_path):
 	words = []
