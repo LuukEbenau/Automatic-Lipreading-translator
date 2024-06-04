@@ -267,8 +267,10 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 			################################### VISUALIZE & VALIDATE ########################################
 			if i % 100 == 0:
-				wav_pred = hifigan(gen_mel.cuda().detach()[0])
-				wav_gt = hifigan(mel.cuda().detach()[0])
+				gen_mel_denormalized = train_data.denormalize(gen_mel.cuda().detach())
+				wav_pred = hifigan(gen_mel_denormalized[0])
+				mel_denormalized = train_data.denormalize(mel.cuda().detach())
+				wav_gt = hifigan(mel_denormalized[0])
 				
 			else:
 				wav_pred = 0
@@ -293,7 +295,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					writer.add_audio('train_aud/gt_wav', wav_tr[0].numpy(), global_step=step, sample_rate=args.samplerate)
 
 			if step % args.eval_step == 0:
-				logs = validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, epoch=epoch, writer=writer, fast_validate=True)
+				logs = validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, hifigan, epoch=epoch, writer=writer, fast_validate=True)
 
 				print('VAL_stoi: ', logs[1])
 				print('Saving checkpoint: %d' % epoch)
@@ -335,7 +337,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 	print('Finishing training')
 
-def validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, fast_validate=True, epoch=0, writer=None):
+def validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, hifigan, fast_validate=True, epoch=0, writer=None):
 	with torch.no_grad():
 		v_front.eval()
 		mel_layer.eval()
@@ -396,6 +398,7 @@ def validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, fast_valida
 
 			wav_pred = val_data.inverse_mel(g_mel, mel_len, stft)
 			wav_gt = val_data.inverse_mel(mel.cuda(), mel_len, stft)
+
 			for _ in range(g_mel.size(0)):
 				min_len = min(len(wav_pred[_]), len(wav_tr[_]))
 				stoi_list.append(stoi(wav_tr[_][:min_len].numpy(), wav_pred[_][:min_len], args.samplerate, extended=False))
@@ -436,16 +439,43 @@ def validate(v_front, mel_layer, sp_layer, ctc_layer, decoder, args, fast_valida
 									 sample_rate=args.samplerate)
 					writer.add_audio('val_aud_%d/gt' % i, wav_tr[0][:len(wav_pred[0])], global_step=epoch,
 									 sample_rate=args.samplerate)
+
+					# CUSTOM hifigan
+					g_mel_normalized = val_data.denormalize(g_mel)
+					mel_denormalized = val_data.denormalize(mel.cuda())
+					wav_pred_hifigan = hifigan(g_mel_normalized)
+					wav_gt_hifigan = hifigan(mel_denormalized)
+
+					writer.add_audio('val_aud_%d/pred_hifigan' % i, wav_pred_hifigan[0], global_step=epoch, sample_rate=args.samplerate)
+					writer.add_audio('val_aud_%d/gt_hifigan' % i, wav_gt_hifigan[0], global_step=epoch, sample_rate=args.samplerate)
+					#END CUSTOM hifigan
+
 					fig = plt.figure()
 					ax = fig.add_subplot(1, 1, 1)
 					ax.set(xlim=[0, len(wav_pred[0])], ylim=[-1, 1])
 					ax.plot(wav_pred[0])
 					writer.add_figure('val_wav_%d/pred_mel' % i, fig, epoch)
+
 					fig = plt.figure()
 					ax = fig.add_subplot(1, 1, 1)
 					ax.set(xlim=[0, len(wav_gt[0][:len(wav_pred[0])])], ylim=[-1, 1])
 					ax.plot(wav_gt[0])
 					writer.add_figure('val_wav_%d/mel' % i, fig, epoch)
+
+					# Custom HIFIGAN PRED
+					fig = plt.figure()
+					ax = fig.add_subplot(1, 1, 1)
+					ax.set(xlim=[0, len(wav_pred_hifigan[0][:len(wav_pred_hifigan[0])])], ylim=[-1, 1])
+					ax.plot(wav_gt[0])
+					writer.add_figure('val_wav_%d/pred_mel_hifigan' % i, fig, epoch)
+
+					fig = plt.figure()
+					ax = fig.add_subplot(1, 1, 1)
+					ax.set(xlim=[0, len(wav_gt_hifigan[0][:len(wav_gt_hifigan[0])])], ylim=[-1, 1])
+					ax.plot(wav_gt[0])
+					writer.add_figure('val_wav_%d/gt_mel_hifigan' % i, fig, epoch)
+					# end custom
+
 					fig = plt.figure()
 					ax = fig.add_subplot(1, 1, 1)
 					ax.set(xlim=[0, len(wav_tr[0][:len(wav_pred[0])])], ylim=[-1, 1])
