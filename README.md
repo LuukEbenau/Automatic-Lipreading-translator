@@ -6,8 +6,52 @@ For each sub-feature of our program
 
 # run the code using
 ```
-python train.py --data D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/data/GRID --data_name GRID --gpu 0 --workers 12 --lr 0.00001 --epochs 200 --batch_size 2 --checkpoint_dir D://Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/checkpoints/ --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 400 --visual_front_checkpoint D:/Projects/kth/speechrecognition/project/Automatic-Lipreading-translator/pretrained/LRS2_front_PT.ckpt 
+python train.py --data <Absolute path to location of Automatic-Lipreading-translator>/data/GRID --data_name GRID --gpu 0 --workers <number of cpu threads> --lr 0.0001 --epochs 200 --batch_size <selected batch size> --checkpoint_dir <absolute path to folder of checkpoints> --output_content_loss --asr_checkpoint "openai/whisper-tiny.en" --asr_checkpoint_type WHISPER --eval_step 400 --visual_front_checkpoint <absolute path to location of Automatic-Lipreading-translator>/pretrained/LRS2_front_PT.ckpt 
 ```
+
+## Requirements
+The required python modules can be installed by running the following command from the top folder of this repository
+```
+pip install -r requirements.txt
+```
+
+### Datasets
+#### Download
+The GRID Audio-Visual Speech Corpus can be downloaded from:
+- https://zenodo.org/records/3625687/
+
+#### Pretrain-Trainval-Test Split
+Our recommended split is found below and is divided into 1 low-error and 1 high-error speaker of both genders in trainval and test, and 1 mid-error male speaker in trainval and test.
+This results in gender-equal dataset pool for training where 2000 random samples are picked from at each epoch.
+
+##### Trainval
+s8 (M), s19 (M), s23 (F), s31 (F), s32 (M)
+
+##### Test
+s13 (M), s14 (M), s17 (M), s24 (F). s33 (F)
+
+#### Known issues in dataset
+As of June 23rd 2024, one speaker is missing (s21) and the following alignments are misplaced:
+
+Split location		Speaker		Alignments found in
+TRAINVAL		S19		S18
+TRAINVAL		S23		S22
+TRAINVAL		S32		S33
+TEST			S13		S12
+TEST			S14		S15
+TEST			S33		S32
+PRETRAIN		S10		S13
+PRETRAIN		S11		S10
+PRETRAIN		S12		S11
+PRETRAIN		S14		S15
+PRETRAIN		S18		S19
+PRETRAIN		S20		S21
+PRETRAIN		S22		S23
+PRETRAIN		S26		S27
+PRETRAIN		S28		S29
+PRETRAIN		S29		S28
+PRETRAIN		S5		S6
+PRETRAIN		S6		S5
 
 
 ## Documentation & Communication
