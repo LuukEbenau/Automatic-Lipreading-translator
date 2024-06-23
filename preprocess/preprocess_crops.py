@@ -60,15 +60,17 @@ def process_file(file, data_dir):
 def preprocess_video(data_dir, data_ext, output_dir, outputfilename):
 	existing_files = set()
 	output_path = os.path.join(output_dir, outputfilename)
+	files_to_process = []
 	
 	if os.path.exists(output_path):
+		print('Output path exists, listing files in subdirectories of input path')
 		with open(output_path, 'r') as f:
 			for line in f:
 				if '/' in line:
 					filename = line.split('/')[0]
 					existing_files.add(filename)
 
-		files = glob.glob(f'{data_dir}/*.{data_ext}', recursive=True)
+		files = glob.glob(f'{data_dir}/**/*.{data_ext}', recursive=True)
 		files = [os.path.relpath(file, data_dir) for file in files]
 
 		# Filter out files that have already been processed
