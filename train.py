@@ -170,7 +170,7 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 		num_workers=args.workers,
 		pin_memory=True,
 		drop_last=True,
-		collate_fn=collate_fn_partial,
+		collate_fn=lambda x: train_data.collate_fn(x),
 	)
 
 	decoder = load_decoder(train_data.char_list)
@@ -316,8 +316,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 
 				torch.save({'v_front_state_dict': v_state_dict, 'ctc_layer_state_dict': ctc_layer_state_dict,
 							'mel_layer_state_dict': mel_layer_state_dict, 'sp_layer_state_dict': sp_layer_state_dict},
-						   os.path.join(args.checkpoint_dir, 'Epoch_%04d_stoi_%.3f_estoi_%.3f_pesq_%.3f.ckpt' % (
-						   epoch, logs[1], logs[2], logs[3])))
+						   os.path.join(args.checkpoint_dir, 'Epoch_%04d_step_%08d_stoi_%.3f_estoi_%.3f_pesq_%.3f.ckpt' % (
+						   epoch, step, logs[1], logs[2], logs[3])))
 
 				if logs[1] > best_val_stoi:
 					best_val_stoi = logs[1]
@@ -327,8 +327,8 @@ def train(v_front, mel_layer, ctc_layer, sp_layer, asr_model, train_data, epochs
 					torch.save({'v_front_state_dict': v_state_dict, 'ctc_layer_state_dict': ctc_layer_state_dict,
 								'mel_layer_state_dict': mel_layer_state_dict,
 								'sp_layer_state_dict': sp_layer_state_dict},
-							   os.path.join(args.checkpoint_dir, 'Best_%04d_stoi_%.3f_estoi_%.3f_pesq_%.3f.ckpt' % (
-							   epoch, logs[1], logs[2], logs[3])))
+							   os.path.join(args.checkpoint_dir, 'Best_%04d_step_%08d_stoi_%.3f_estoi_%.3f_pesq_%.3f.ckpt' % (
+							   epoch, step, logs[1], logs[2], logs[3])))
 
 		if np.mean(recon_loss_list) < args.output_content_on and epoch > 4:
 			args.output_content_loss = True
