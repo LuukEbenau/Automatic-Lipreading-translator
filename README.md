@@ -86,11 +86,15 @@ As of June 23rd 2024, one speaker is missing (s21) and the following alignments 
 
 ### Performance Comparison
 
+<div align="center">
+  
 | Model | STOI | ESTOI | WER* |
 |:------|:----:|:-----:|:----:|
 | $\text{Our Model}_{GRID}$  | 0.54 | 0.27 | 70% |
 | $\text{Our Model}_{GRID}$ + ASR | 0.481 | 0.203 | 76% |
 | $Model_{LRS2}$ | 0.526 | 0.341 | 60% |
+
+</div>
 
 *Actual WER values are  lower than 50% since ther was an issue with extra `SIL` tokens at start and end causing shifting of alignments hence artificially higher WER.
 
