@@ -1,5 +1,5 @@
 # Automatic-Lipreading-translator
-This page serves as an landing page of the project, describing the project globally. For more information, go to the [wiki](https://github.com/LuukEbenau/Automatic-Lipreading-translator/wiki). 
+This page serves as an landing page of the project, describing the project for DT2119 at KTH . For more information, go to the [wiki](https://github.com/LuukEbenau/Automatic-Lipreading-translator/wiki). 
 # Code writing instruction
 For each sub-feature of our program
 
